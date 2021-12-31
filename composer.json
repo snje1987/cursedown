@@ -1,0 +1,23 @@
+{
+    "type": "application",
+    "description": "下载curseforge的整合包的php工具",
+    "keywords": ["php", "curseforge"],
+    "homepage": "https://github.com/snje1987/cursedown",
+    "license": "GPL-3.0-or-later",
+    "authors": [
+        {
+            "name": "Yang Ming",
+            "email": "yangming0116@163.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=7.0",
+        "minifw/console": "^v1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Org\\Snje\\Cursedown\\": "src/"
+        }
+    }
+}
