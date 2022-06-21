@@ -19,17 +19,22 @@
 
 namespace Org\Snje\Cursedown;
 
-use Org\Snje\Cursedown;
 use Minifw\Common\Exception;
+use Org\Snje\Cursedown;
 
-class HttpClient {
-
-    public function download($url, $save_path) {
+class HttpClient
+{
+    /**
+     * @param $url
+     * @param $save_path
+     * @return mixed
+     */
+    public function download($url, $save_path)
+    {
         for ($i = 1; $i <= self::MAX_RETRY; $i++) {
             try {
-                return $this->do_download($url, $save_path);
-            }
-            catch (Exception $ex) {
+                return $this->doDownload($url, $save_path);
+            } catch (Exception $ex) {
                 if ($i >= self::MAX_RETRY) {
                     throw $ex;
                 }
@@ -39,19 +44,25 @@ class HttpClient {
         }
     }
 
-    public function do_download($url, $save_path) {
+    /**
+     * @param $url
+     * @param $save_path
+     * @return null
+     */
+    public function doDownload($url, $save_path)
+    {
         $max_redirect = 5;
 
         while ($max_redirect > 0) {
-            $ch = $this->prepare_curl('GET', $url, null);
+            $ch = self::prepareCurl('GET', $url, null);
 
             $fh = fopen($save_path, 'w');
 
             curl_setopt($ch, CURLOPT_FILE, $fh);
             curl_setopt($ch, CURLOPT_HEADER, false);
             curl_setopt($ch, CURLOPT_NOPROGRESS, false);
-            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, [$this, 'on_progress']);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 0);
+            curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, [$this, 'onProgress']);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 20);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 0);
 
             $result = curl_exec($ch);
@@ -68,34 +79,47 @@ class HttpClient {
             $result = curl_getinfo($ch);
             if (!empty($result['redirect_url'])) {
                 $url = $result['redirect_url'];
-            }
-            else {
+            } else {
                 return;
             }
         }
         throw new Exception('too many redirect');
     }
 
-    public function on_progress($ch, $total_down, $down, $total_up, $up) {
+    /**
+     * @param $ch
+     * @param $total_down
+     * @param $down
+     * @param $total_up
+     * @param $up
+     */
+    public function onProgress($ch, $total_down, $down, $total_up, $up)
+    {
         $now = time();
 
-        if ($this->progress_timer != $now) {
-            $this->speed = $down - $this->last_down;
-            $this->progress_timer = $now;
-            $this->last_down = $down;
+        if ($this->progressTimer != $now) {
+            $this->speed = $down - $this->lastDown;
+            $this->progressTimer = $now;
+            $this->lastDown = $down;
         }
 
         if ($total_down > 0) {
-            $msg = ' [' . self::show_size($down) . '/' . self::show_size($total_down) . ' ' . bcdiv($down * 100, $total_down, 2) . '% ' . self::show_size($this->speed) . '/s]';
-            $this->console->set_status($msg);
-        }
-        elseif ($down > 0) {
-            $msg = ' [' . self::show_size($down) . ' ' . self::show_size($this->speed) . '/s]';
-            $this->console->set_status($msg);
+            $msg = ' [' . self::showSize($down) . '/' . self::showSize($total_down) . ' ' . bcdiv($down * 100, $total_down, 2) . '% ' . self::showSize($this->speed) . '/s]';
+            $this->console->setStatus($msg);
+        } elseif ($down > 0) {
+            $msg = ' [' . self::showSize($down) . ' ' . self::showSize($this->speed) . '/s]';
+            $this->console->setStatus($msg);
         }
     }
 
-    public function get($url, $param = [], $return_type = 'raw') {
+    /**
+     * @param $url
+     * @param array $param
+     * @param $return_type
+     * @return mixed
+     */
+    public function get($url, $param = [], $return_type = 'raw')
+    {
         if (!empty($param)) {
             $param = http_build_query($param);
             $url .= '?' . $param;
@@ -103,9 +127,8 @@ class HttpClient {
 
         for ($i = 1; $i <= self::MAX_RETRY; $i++) {
             try {
-                return $this->do_request('GET', $url, [], $return_type);
-            }
-            catch (Exception $ex) {
+                return self::doRequest('GET', $url, [], $return_type);
+            } catch (Exception $ex) {
                 if ($i >= self::MAX_RETRY) {
                     throw $ex;
                 }
@@ -115,8 +138,16 @@ class HttpClient {
         }
     }
 
-    protected function do_request($method, $url, $body, $return_type) {
-        $ch = $this->prepare_curl($method, $url, $body);
+    /**
+     * @param $method
+     * @param $url
+     * @param $body
+     * @param $return_type
+     * @return mixed
+     */
+    public static function doRequest($method, $url, $body, $return_type)
+    {
+        $ch = self::prepareCurl($method, $url, $body);
 
         $content = curl_exec($ch);
         $error = curl_errno($ch);
@@ -128,20 +159,29 @@ class HttpClient {
         }
         $result = curl_getinfo($ch);
 
-        return $this->parse_result($result, $content, $return_type);
+        return self::parseResult($result, $content, $return_type);
     }
 
-    protected function prepare_curl($method, $url, $body) {
+    /**
+     * @param $method
+     * @param $url
+     * @param $body
+     * @return mixed
+     */
+    public static function prepareCurl($method, $url, $body)
+    {
         $ch = curl_init();
         $options = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 20,
-            CURLOPT_TIMEOUT => 60,
+            CURLOPT_TIMEOUT => 0,
             CURLOPT_URL => $url,
             CURLOPT_CUSTOMREQUEST => $method,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_HEADER => true,
+            CURLOPT_LOW_SPEED_LIMIT => 100,
+            CURLOPT_LOW_SPEED_TIME => 10
         ];
 
         if (file_exists(self::CAROOT) && filesize(self::CAROOT) > 0) {
@@ -164,14 +204,21 @@ class HttpClient {
         $options[CURLOPT_HTTPHEADER] = $header;
 
         curl_setopt_array($ch, $options);
+
         return $ch;
     }
 
-    protected function parse_result($result, $content, $return_type) {
+    /**
+     * @param $result
+     * @param $content
+     * @param $return_type
+     * @return mixed
+     */
+    public static function parseResult($result, $content, $return_type)
+    {
         if (preg_match_all('/Set-Cookie:(.*);/iU', $content, $matches)) {
             $result['cookie'] = substr(implode(';', $matches[1]), 1);
-        }
-        else {
+        } else {
             $result['cookie'] = '';
         }
 
@@ -179,8 +226,7 @@ class HttpClient {
         if ($header_size > 0) {
             $result['header'] = substr($content, 0, $header_size - 4);
             $result['body'] = substr($content, $header_size);
-        }
-        else {
+        } else {
             $result['header'] = '';
             $result['body'] = $content;
         }
@@ -190,8 +236,7 @@ class HttpClient {
             if ($code != 301 && $code != 302) {
                 throw new Exception($result['header'], $code);
             }
-        }
-        else {
+        } else {
             if ($return_type == 'json') {
                 $json = json_decode($result['body'], true);
                 if ($json === null) {
@@ -206,24 +251,39 @@ class HttpClient {
 
     ////////////////////////////////////////////////
 
-    public static function show_size($size) {
-        return \Minifw\Common\Utils::show_size($size);
+    /**
+     * @param $size
+     */
+    public static function showSize($size)
+    {
+        return \Minifw\Common\Utils::showSize($size);
     }
 
     /////////////////////////////////////////////////////
 
-    protected function init() {
+    /**
+     * @return mixed
+     */
+    public static function init()
+    {
         if (!file_exists(self::CAROOT) || time() - filemtime(self::CAROOT) > self::UPDATE_OFFSET) {
-            $result = $this->get(self::CAROOT_URL);
-            if ($result['http_code'] == 200) {
-                file_put_contents(self::CAROOT, $result['body']);
+            try {
+                $result = self::doRequest('GET', self::CAROOT_URL, [], 'raw');
+                if ($result['http_code'] == 200) {
+                    file_put_contents(self::CAROOT, $result['body']);
+                }
+            } catch (Exception $ex) {
             }
         }
     }
 
-    public function __construct($console) {
+    /**
+     * @param $console
+     */
+    public function __construct($console)
+    {
+        self::init();
         $this->console = $console;
-        $this->init();
     }
 
     const CAROOT = DATA_DIR . '/caroot.pem';
@@ -231,14 +291,22 @@ class HttpClient {
     const UPDATE_OFFSET = 2592000; //7天
     const MAX_RETRY = 3;
 
-    protected $progress_timer;
+    /**
+     * @var mixed
+     */
+    protected $progressTimer;
+    /**
+     * @var int
+     */
     protected $speed = 0;
-    protected $last_down = 0;
+    /**
+     * @var int
+     */
+    protected $lastDown = 0;
 
     /**
      *
      * @var Console
      */
     protected $console;
-
 }

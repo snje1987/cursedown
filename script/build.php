@@ -23,17 +23,25 @@ namespace Org\Snje\Cursedown;
 use FilesystemIterator;
 use Phar;
 
-class Builder {
-
+class Builder
+{
+    /**
+     * @var mixed
+     */
     protected $root;
 
     const PHAR_NAME = 'cursedown.phar';
 
-    public function __construct($root) {
+    /**
+     * @param $root
+     */
+    public function __construct($root)
+    {
         $this->root = $root;
     }
 
-    public function build() {
+    public function build()
+    {
         $dst = $this->root . '/build';
 
         if (!file_exists($dst)) {
@@ -51,7 +59,7 @@ class Builder {
         ];
 
         foreach ($dirs as $dir) {
-            $this->add_dir($phar, $dir);
+            $this->addDir($phar, $dir);
         }
 
         $files = [
@@ -76,7 +84,8 @@ class Builder {
      * @param \Phar $phar
      * @param string $dir
      */
-    public function add_dir($phar, $dir) {
+    public function addDir($phar, $dir)
+    {
         $phar->addEmptyDir($dir);
 
         $full = $this->root . '/' . $dir;
@@ -91,14 +100,12 @@ class Builder {
             $rel_path = $dir . '/' . $file;
 
             if (is_dir($path)) {
-                $this->add_dir($phar, $rel_path);
-            }
-            else {
+                $this->addDir($phar, $rel_path);
+            } else {
                 $phar->addFile($path, $rel_path);
             }
         }
     }
-
 }
 
 $root = dirname(__DIR__);

@@ -31,20 +31,19 @@ if (!defined('APP_ROOT')) {
 }
 
 if (!defined('DATA_DIR')) {
-    $data_dir = getenv("HOME");
-    if (empty($data_dir)) {
-        $data_dir = rtrim(sys_get_temp_dir(), '\\/');
-    }
-    else {
-        $data_dir = rtrim($data_dir, '\\/');
+    $dataDir = getenv("HOME");
+    if (empty($dataDir)) {
+        $dataDir = rtrim(sys_get_temp_dir(), '\\/');
+    } else {
+        $dataDir = rtrim($dataDir, '\\/');
     }
 
-    $data_dir .= '/.cursedown';
+    $dataDir .= '/.cursedown';
 
-    if (!file_exists($data_dir)) {
-        mkdir($data_dir, 0777, true);
+    if (!file_exists($dataDir)) {
+        mkdir($dataDir, 0777, true);
     }
-    define('DATA_DIR', $data_dir);
+    define('DATA_DIR', $dataDir);
 }
 
 $app = new App();

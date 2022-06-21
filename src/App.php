@@ -19,99 +19,136 @@
 
 namespace Org\Snje\Cursedown;
 
-use Org\Snje\Cursedown;
 use Minifw\Common\Exception;
-use Minifw\Console\Console;
 use Minifw\Console\Cmd;
+use Minifw\Console\Console;
+use Org\Snje\Cursedown;
 
 /**
  * @document_url https://modpacksch.docs.apiary.io/
  */
-class App {
-
+class App
+{
     /**
      * @var HttpClient
      */
     protected $client;
+    /**
+     * @var Downloader
+     */
+    protected $downloader;
+    /**
+     * @var mixed
+     */
     protected $action;
+    /**
+     * @var mixed
+     */
     protected $args;
+    /**
+     * @var \Minifw\Console\Console
+     */
     protected $console;
+    /**
+     * @var mixed
+     */
     protected $config;
 
     const DEFAULT_ARGS = [
         'search' => [
-            'name' => [//整合包名称
+            'name' => [ //整合包名称
                 'default' => null,
                 'alias' => ['s'],
-                'params' => ['string'],
-            ],
+                'params' => ['string']
+            ]
         ],
-        'download' => [
-            'id' => [//整合包ID
+        'info' => [
+            'id' => [ //整合包ID
                 'default' => null,
                 'alias' => ['id'],
-                'params' => ['int'],
-            ],
-            'path' => [//保存路径
-                'default' => null,
-                'alias' => ['p'],
-                'params' => ['dir'],
+                'params' => ['int']
             ],
             'curse' => [
                 'default' => null,
                 'alias' => ['c'],
-                'params' => ['bool'],
+                'params' => ['bool']
+            ]
+        ],
+        'download' => [
+            'id' => [ //整合包ID
+                'default' => null,
+                'alias' => ['id'],
+                'params' => ['int']
             ],
+            'path' => [ //保存路径
+                'default' => null,
+                'alias' => ['p'],
+                'params' => ['dir']
+            ],
+            'curse' => [
+                'default' => null,
+                'alias' => ['c'],
+                'params' => ['bool']
+            ]
         ],
         'modify' => [
-            'path' => [//保存路径
+            'path' => [ //保存路径
                 'default' => '.',
                 'alias' => ['p'],
-                'params' => ['dir'],
+                'params' => ['dir']
             ],
-            'rm' => [//模组列表
+            'rm' => [ //模组列表
                 'default' => [],
                 'alias' => ['r'],
-                'params' => [['type' => 'array', 'data_type' => 'int']],
-            ],
-        ],
+                'params' => [['type' => 'array', 'data_type' => 'int']]
+            ]
+        ]
     ];
     const API_URL = 'https://api.modpacks.ch/public/';
     const CACHE_DIR = DATA_DIR . '/cache';
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->config = new Config(DATA_DIR . '/config.json');
         if ($this->config->get('debug')) {
             define('DEBUG', 1);
-        }
-        else {
+        } else {
             define('DEBUG', 0);
         }
 
         $this->console = new Console();
         $this->client = new HttpClient($this->console);
+        $this->downloader = new Downloader($this->console, 10);
     }
 
-    public function run($argv) {
+    /**
+     * @param $argv
+     */
+    public function run($argv)
+    {
         try {
             array_shift($argv);
-            $this->parse_args($argv);
-            $this->do_job();
-        }
-        catch (Exception $ex) {
+            $this->parseArgs($argv);
+            $this->doJob();
+        } catch (Exception $ex) {
             $msg = $ex->getMessage();
             if (DEBUG) {
                 $msg = $ex->getFile() . '[' . $ex->getLine() . ']: ' . $msg;
             }
 
             $this->console->reset()->print($msg);
-            $this->print_help();
+            $this->printHelp();
         }
     }
 
     /////////////////////////////////////
 
-    public static function clear_dir($path, $remove = false) {
+    /**
+     * @param $path
+     * @param $remove
+     */
+    public static function clearDir($path, $remove = false)
+    {
         if (!is_dir($path)) {
             throw new Exception('参数不合法：' . $path);
         }
@@ -124,10 +161,9 @@ class App {
             }
             $full = $path . '/' . $file;
             if (is_dir($full)) {
-                self::clear_dir($full);
+                self::clearDir($full);
                 rmdir($full);
-            }
-            else {
+            } else {
                 unlink($full);
             }
         }
@@ -137,7 +173,17 @@ class App {
         }
     }
 
-    public static function merge_dir($from, $to) {
+    /**
+     * @param $from
+     * @param $to
+     * @param $includeSub
+     */
+    public static function mergeDir($from, $to, $includeSub = false)
+    {
+        if (!file_exists($to)) {
+            mkdir($to, 0777, true);
+        }
+
         $from_list = scandir($from);
         $to_list = scandir($to);
 
@@ -156,14 +202,24 @@ class App {
             }
 
             if (isset($to_hash[$file])) {
-                continue;
+                if ($includeSub && is_dir($to . '/' . $file)) {
+                    self::mergeDir($from . '/' . $file, $to . '/' . $file, $includeSub);
+                } else {
+                    continue;
+                }
+            } else {
+                rename($from . '/' . $file, $to . '/' . $file);
             }
-
-            rename($from . '/' . $file, $to . '/' . $file);
         }
     }
 
-    public static function override_dir($from, $to, $copy = false) {
+    /**
+     * @param $from
+     * @param $to
+     * @param $copy
+     */
+    public static function overrideDir($from, $to, $copy = false)
+    {
         if (file_exists($to) && !is_dir($to)) {
             unlink($to);
         }
@@ -195,39 +251,39 @@ class App {
             if (isset($to_hash[$file])) {
                 if (is_file($src)) {
                     if (is_dir($dst)) {
-                        self::clear_dir($dst, true);
+                        self::clearDir($dst, true);
                     }
                     if ($copy) {
                         copy($src, $dst);
-                    }
-                    else {
+                    } else {
                         rename($src, $dst);
                     }
-                }
-                else {
+                } else {
                     if (is_file($dst)) {
                         unlink($dst);
                     }
-                    self::override_dir($src, $dst);
+                    self::overrideDir($src, $dst, $copy);
                 }
-            }
-            else {
+            } else {
                 if ($copy) {
                     if (is_file($src)) {
                         copy($src, $dst);
+                    } else {
+                        self::overrideDir($src, $dst, $copy);
                     }
-                    else {
-                        self::override_dir($src, $dst);
-                    }
-                }
-                else {
+                } else {
                     rename($src, $dst);
                 }
             }
         }
     }
 
-    public static function file_is_ok($info, $path) {
+    /**
+     * @param $info
+     * @param $path
+     */
+    public static function fileIsOk($info, $path)
+    {
         if (!file_exists($path)) {
             return false;
         }
@@ -248,7 +304,8 @@ class App {
 
     ///////////////////////////////////
 
-    protected function print_help() {
+    protected function printHelp()
+    {
         $help_file = APP_ROOT . '/res/help.txt';
 
         $data = file_get_contents($help_file);
@@ -256,22 +313,28 @@ class App {
         $this->console->print($data);
     }
 
-    protected function parse_args($argv) {
-        $this->action = Cmd::get_action($argv, self::DEFAULT_ARGS);
+    /**
+     * @param $argv
+     */
+    protected function parseArgs($argv)
+    {
+        $this->action = Cmd::getAction($argv, self::DEFAULT_ARGS);
         array_shift($argv);
 
         $cfg = self::DEFAULT_ARGS[$this->action];
-        $this->args = Cmd::get_args($argv, $cfg);
+        $this->args = Cmd::getArgs($argv, $cfg);
     }
 
     ////////////////////////////////////////////////
 
-    protected function do_job() {
-        $function = 'do_' . $this->action;
+    protected function doJob()
+    {
+        $function = 'do' . ucfirst($this->action);
         call_user_func([$this, $function]);
     }
 
-    protected function do_search() {
+    protected function doSearch()
+    {
         if (empty($this->args['name'])) {
             throw new Exception('必须指定参数[name]');
         }
@@ -289,14 +352,19 @@ class App {
         $body = $data['body'];
 
         if (!empty($body['packs'])) {
-            $msg = 'ID: ' . implode(', ', $body['packs']);
+            $msg = 'Packs: ' . implode(', ', $body['packs']);
+            $this->console->print($msg);
+        }
+        if (!empty($body['curseforge'])) {
+            $msg = 'Curseforge: ' . implode(', ', $body['curseforge']);
             $this->console->print($msg);
         }
     }
 
-    protected function do_modify() {
+    protected function doModify()
+    {
         if ($this->args['path'] === '.') {
-            $this->args['path'] = Cmd::get_full_path('.');
+            $this->args['path'] = Cmd::getFullPath('.');
         }
 
         if (empty($this->args['path'])) {
@@ -313,17 +381,18 @@ class App {
 
         if (!empty($rm)) {
             $this->console->print('正在编辑模组');
-            $this->action_dependency_modify($pack_path, $rm);
+            $this->actionDependencyModify($pack_path, $rm);
         }
     }
 
-    protected function do_download() {
+    protected function doDownload()
+    {
         if (empty($this->args['path'])) {
             throw new Exception('参数[path]不能为空');
         }
 
         $id = null;
-        $pack_path = Cmd::get_full_path($this->args['path']);
+        $pack_path = Cmd::getFullPath($this->args['path']);
 
         if (!empty($this->args['id'])) {
             $id = strval($this->args['id']);
@@ -334,20 +403,75 @@ class App {
             $is_curse = $this->args['curse'];
         }
 
-        $pack_path = $this->action_download_modpack($id, $pack_path, $is_curse);
-        $this->action_download_dependency($pack_path);
-        $this->action_restore_change($pack_path);
+        $pack_path = $this->actionDownloadModpack($id, $pack_path, $is_curse);
+        $this->actionDownloadDependency($pack_path);
+        $this->actionRestoreChange($pack_path);
 
         if (file_exists($pack_path . '/overrides_old')) {
-            self::clear_dir($pack_path . '/overrides_old', true);
+            self::clearDir($pack_path . '/overrides_old', true);
         }
         rename($pack_path . '/curse_new.json', $pack_path . '/curse.json');
         rename($pack_path . '/manifest_new.json', $pack_path . '/manifest.json');
     }
 
+    protected function doInfo()
+    {
+        if (empty($this->args['id'])) {
+            throw new Exception('必须指定ID');
+        }
+        $id = strval($this->args['id']);
+
+        $is_curse = false;
+        if (isset($this->args['curse'])) {
+            $is_curse = $this->args['curse'];
+        }
+
+        if ($is_curse) {
+            $url = self::API_URL . 'curseforge/' . $id;
+        } else {
+            $url = self::API_URL . 'modpack/' . $id;
+        }
+
+        $this->console->setStatus('获取整合包信息...');
+        $data = $this->client->get($url, [], 'json');
+        $body = $data['body'];
+
+        if (!empty($body['name'])) {
+            $this->console->print('name: ' . $body['name']);
+        }
+
+        if (!isset($body['versions'])) {
+            throw new Exception('下载失败:' . $id);
+        }
+
+        $new_file = [];
+        foreach ($body['versions'] as $file) {
+            if (empty($new_file) || $file['id'] > $new_file['id']) {
+                $new_file = $file;
+            }
+        }
+
+        if (!empty($new_file)) {
+            $this->console->print('updated: ' . $new_file['name'] . ' ' . $new_file['type'] . ' ' . date('Y-m-d H:i:s', $new_file['updated']));
+        }
+
+        if (!empty($body['description'])) {
+            $this->console->print('description: ' . $body['description']);
+        }
+
+        $this->console->reset();
+    }
+
     //////////////////////////////////////////
 
-    protected function action_download_modpack($id, $pack_dir, $is_curse) {
+    /**
+     * @param $id
+     * @param $pack_dir
+     * @param $is_curse
+     * @return mixed
+     */
+    protected function actionDownloadModpack($id, $pack_dir, $is_curse)
+    {
         $curse_old = [];
 
         $info_file = $pack_dir . '/curse.json';
@@ -363,8 +487,7 @@ class App {
         if ($id === null) {
             if (!empty($curse_old) && !empty($curse_old['id'])) {
                 $id = $curse_old['id'];
-            }
-            else {
+            } else {
                 throw new Exception('缺少整合包ID');
             }
         }
@@ -372,20 +495,18 @@ class App {
         if ($is_curse === null) {
             if (!empty($curse_old) && isset($curse_old['is_curse'])) {
                 $is_curse = $curse_old['is_curse'];
-            }
-            else {
+            } else {
                 $is_curse = false;
             }
         }
 
         if ($is_curse) {
             $url = self::API_URL . 'curseforge/' . $id;
-        }
-        else {
+        } else {
             $url = self::API_URL . 'modpack/' . $id;
         }
 
-        $this->console->set_status('获取整合包信息...');
+        $this->console->setStatus('获取整合包信息...');
         $data = $this->client->get($url, [], 'json');
 
         if (empty($data['body']) || !is_array($data['body'])) {
@@ -399,10 +520,6 @@ class App {
 
         $new_file_id = 0;
         foreach ($data['versions'] as $file) {
-            if (strtolower($file['type']) != 'release') {
-                continue;
-            }
-
             $new_id = intval($file['id']);
             if ($new_id > $new_file_id) {
                 $new_file_id = $new_id;
@@ -415,14 +532,13 @@ class App {
 
         if ($is_curse) {
             $url = self::API_URL . 'curseforge/' . $id;
-        }
-        else {
+        } else {
             $url = self::API_URL . 'modpack/' . $id;
         }
 
         $url .= '/' . $new_file_id;
 
-        $this->console->set_status('获取版本信息...');
+        $this->console->setStatus('获取版本信息...');
         $data = $this->client->get($url, [], 'json');
 
         $manifest = $data['body'];
@@ -443,12 +559,10 @@ class App {
 
         $new_path = $pack_dir . '/overrides';
 
-        if ($curse_old['file_id'] != $curse['file_id'] || !is_dir($new_path)) {
-            if (is_dir($new_path)) {
-                $old_path = $new_path . '_old';
-                if (!file_exists($old_path)) {
-                    rename($new_path, $old_path);
-                }
+        if (is_dir($new_path)) {
+            $old_path = $new_path . '_old';
+            if (!file_exists($old_path)) {
+                rename($new_path, $old_path);
             }
         }
 
@@ -458,24 +572,49 @@ class App {
         return $pack_dir;
     }
 
-    protected function action_download_dependency($pack_path) {
-        $pack_info = self::load_pack_info($pack_path, true);
+    /**
+     * @param $pack_path
+     */
+    protected function actionDownloadDependency($pack_path)
+    {
+        $pack_info = self::loadPackInfo($pack_path, true);
 
         $mainfest = $pack_info['manifest'];
         $curse = $pack_info['curse'];
 
         $this->console->print('正在下载模组');
 
-        $files = self::prase_dependency($mainfest['files'], $curse);
+        $files = self::praseDependency($mainfest['files'], $curse);
 
         $total = count($files);
         $i = 0;
         foreach ($files as $file) {
-            $this->action_download_file($pack_path, $file, (++$i) . '/' . $total);
+            $this->actionDownloadFile($pack_path, $file, (++$i) . '/' . $total);
+        }
+
+        $this->downloader->flush();
+
+        foreach ($files as $file) {
+            if ($file['type'] == 'cf-extract') {
+                $new_path = $pack_path . '/' . $file['name'];
+                $this->console->print('解压文件: ' . $file['name']);
+
+                $zip = new \ZipArchive();
+                $zip->open($new_path);
+                $zip->extractTo($pack_path . '/' . $file['path']);
+
+                $this->console->print('文件解压完成：' . $file['name']);
+            }
         }
     }
 
-    protected function action_download_file($pack_path, $file, $progress = '') {
+    /**
+     * @param $pack_path
+     * @param $file
+     * @param $progress
+     */
+    protected function actionDownloadFile($pack_path, $file, $progress = '')
+    {
         if (!file_exists($pack_path)) {
             mkdir($pack_path, 0777, true);
         }
@@ -490,85 +629,86 @@ class App {
         if ($file['type'] == 'mod' || $file['type'] == 'resource' || $file['type'] == 'config' || $file['type'] == 'script') {
             $new_path = $new_dir . $file['path'] . $file['name'];
             $old_path = $old_dir . $file['path'] . $file['name'];
-            $this->action_download_with_cache($file, $new_path, $old_path, $progress);
-        }
-        elseif ($file['type'] == 'cf-extract') {
+            $this->actionDownloadWithCache($file, $new_path, $old_path, $progress);
+        } elseif ($file['type'] == 'cf-extract') {
             $new_path = $pack_path . '/' . $file['name'];
-
-            $this->console->set_status('下载地址：' . $file['url']);
-            $this->console->print($progress . '下载文件：' . $file['name'] . self::show_size($file['size']));
-            $this->client->download($file['url'], $new_path);
-            $this->console->reset();
-
-            $this->console->set_status('解压文件...');
-
-            $zip = new \ZipArchive();
-            $zip->open($new_path);
-            $zip->extractTo($pack_path . '/' . $file['path']);
-
-            $this->console->reset()->print('文件解压完成：' . $file['name']);
-        }
-        else {
+            $this->console->print($progress . '下载文件：' . $file['name'] . self::showSize($file['size']));
+            $this->downloader->download($file['url'], $new_path);
+        } else {
             throw new Exception('manifest数据不合法' . $file['type']);
         }
     }
 
-    protected function action_download_with_cache($info, $new_path, $old_path, $progress) {
+    /**
+     * @param $info
+     * @param $new_path
+     * @param $old_path
+     * @param $progress
+     * @return null
+     */
+    protected function actionDownloadWithCache($info, $new_path, $old_path, $progress)
+    {
         $dir = dirname($new_path);
         if (!file_exists($dir)) {
             mkdir($dir, 0755, true);
         }
 
-        if (file_exists($new_path) && self::file_is_ok($info, $new_path)) {
-            $this->console->reset()->print($progress . '文件已存在：' . basename($new_path) . self::show_size($info['size']));
+        if (file_exists($new_path) && self::fileIsOk($info, $new_path)) {
+            $this->console->reset()->print($progress . '文件已存在：' . $info['path'] . $info['name'] . self::showSize($info['size']));
+
             return;
-        }
-        elseif (file_exists($old_path) && self::file_is_ok($info, $old_path)) {
-            $this->console->reset()->print($progress . '文件未更新：' . basename($new_path) . self::show_size($info['size']));
+        } elseif (file_exists($old_path) && self::fileIsOk($info, $old_path)) {
+            $this->console->reset()->print($progress . '文件未更新：' . $info['path'] . $info['name'] . self::showSize($info['size']));
             rename($old_path, $new_path);
-        }
-        else {
-            $this->console->set_status('下载地址：' . $info['url']);
-            $this->console->print($progress . '下载文件：' . $info['name'] . self::show_size($info['size']));
-            $this->client->download($info['url'], $new_path);
-            $this->console->reset();
+        } else {
+            $this->console->print($progress . '下载文件：' . $info['path'] . $info['name'] . self::showSize($info['size']));
+            $this->downloader->download($info['url'], $new_path);
         }
     }
 
-    protected function action_restore_change($pack_path) {
+    /**
+     * @param $pack_path
+     * @return null
+     */
+    protected function actionRestoreChange($pack_path)
+    {
         $new_dir = $pack_path . '/overrides/';
         $old_dir = $pack_path . '/overrides_old/';
 
+        if (!file_exists($old_dir)) {
+            return;
+        }
+
         $dirs = ['saves'];
         foreach ($dirs as $dir) {
-            if (file_exists($old_dir . '/' . $dir)) {
-                self::override_dir($old_dir . '/' . $dir, $new_dir . '/' . $dir);
+            if (file_exists($old_dir . $dir)) {
+                self::overrideDir($old_dir . $dir, $new_dir . $dir);
             }
         }
 
-        $dirs = ['config', 'journeymap'];
+        $dirs = ['config'];
         foreach ($dirs as $dir) {
-            if (file_exists($old_dir . '/' . $dir)) {
-                self::merge_dir($old_dir . '/' . $dir, $new_dir . '/' . $dir);
+            if (file_exists($old_dir . $dir)) {
+                self::mergeDir($old_dir . $dir, $new_dir . $dir, true);
             }
         }
 
-        $files = ['options.txt'];
-        foreach ($files as $file) {
-            if (file_exists($old_dir . '/' . $file)) {
-                rename($old_dir . '/' . $file, $new_dir . '/' . $file);
-            }
-        }
+        self::mergeDir($old_dir, $new_dir);
 
         if (file_exists($pack_path . '/custom')) {
-            self::override_dir($pack_path . '/custom', $pack_path . '/overrides', true);
+            self::overrideDir($pack_path . '/custom', $pack_path . '/overrides', true);
         }
     }
 
     //////////////////////////////////////////////////////
 
-    protected function action_dependency_modify($pack_path, $rm = []) {
-        $pack_info = self::load_pack_info($pack_path);
+    /**
+     * @param $pack_path
+     * @param array $rm
+     */
+    protected function actionDependencyModify($pack_path, $rm = [])
+    {
+        $pack_info = self::loadPackInfo($pack_path);
 
         $curse = $pack_info['curse'];
 
@@ -579,7 +719,7 @@ class App {
         foreach ($rm as $proj_id) {
             $curse['modify'][$proj_id] = [
                 'type' => 'rm',
-                'id' => strval($proj_id),
+                'id' => strval($proj_id)
             ];
         }
 
@@ -590,7 +730,13 @@ class App {
 
     ////////////////////////////////////////////////////////////////////
 
-    protected static function prase_dependency($origin, $curse) {
+    /**
+     * @param $origin
+     * @param $curse
+     * @return mixed
+     */
+    protected static function praseDependency($origin, $curse)
+    {
         $deps = [];
 
         foreach ($origin as $file) {
@@ -610,11 +756,15 @@ class App {
         return $deps;
     }
 
-    protected static function load_pack_info($pack_path, $is_new = false) {
+    /**
+     * @param $pack_path
+     * @param $is_new
+     */
+    protected static function loadPackInfo($pack_path, $is_new = false)
+    {
         if ($is_new) {
             $curse_path = $pack_path . '/curse_new.json';
-        }
-        else {
+        } else {
             $curse_path = $pack_path . '/curse.json';
         }
 
@@ -627,8 +777,7 @@ class App {
 
         if ($is_new) {
             $file_path = $pack_path . '/manifest_new.json';
-        }
-        else {
+        } else {
             $file_path = $pack_path . '/manifest.json';
         }
 
@@ -645,14 +794,17 @@ class App {
 
         return [
             'manifest' => $mainfest,
-            'curse' => $curse,
+            'curse' => $curse
         ];
     }
 
     ///////////////////////////////////////////////////////////////////
 
-    public static function show_size($size) {
-        return " \033[32m[" . HttpClient::show_size($size) . "\033[0m]";
+    /**
+     * @param $size
+     */
+    public static function showSize($size)
+    {
+        return " \033[32m[" . HttpClient::showSize($size) . "\033[0m]";
     }
-
 }

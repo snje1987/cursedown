@@ -20,11 +20,14 @@
 namespace Org\Snje\Cursedown;
 
 use Org\Snje\Cursedown;
-use Minifw\Common\Exception;
 
-class Config {
-
-    public function __construct($config_file) {
+class Config
+{
+    /**
+     * @param $config_file
+     */
+    public function __construct($config_file)
+    {
         $this->config_file = strval($config_file);
 
         if (file_exists($this->config_file)) {
@@ -34,49 +37,70 @@ class Config {
         $this->save();
     }
 
-    public function load() {
+    public function load()
+    {
         $json = file_get_contents($this->config_file);
         $data = json_decode($json, true);
 
-        $this->merge_config($data);
+        $this->mergeConfig($data);
     }
 
-    public function save() {
+    public function save()
+    {
         $json = json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         $file = new \Minifw\Common\File($this->config_file);
-        $file->put_content($json);
+        $file->putContent($json);
     }
 
-    public function get($name) {
+    /**
+     * @param $name
+     * @return mixed
+     */
+    public function get($name)
+    {
         if (isset($this->data[$name])) {
             return $this->data[$name];
         }
+
         return null;
     }
 
-    public function set($name, $value) {
+    /**
+     * @param $name
+     * @param $value
+     */
+    public function set($name, $value)
+    {
         if ($value === null) {
             if (isset($this->data[$name])) {
                 unset($this->data[$name]);
             }
-        }
-        else {
+        } else {
             $this->data[$name] = $value;
         }
     }
 
     ///////////////////////////////////////
 
-    protected function merge_config($new_data) {
+    /**
+     * @param $new_data
+     */
+    protected function mergeConfig($new_data)
+    {
         if (!empty($new_data['debug']) && $new_data['debug']) {
             $this->data['debug'] = true;
         }
     }
 
+    /**
+     * @var mixed
+     */
     protected $config_file;
+    /**
+     * @var array
+     */
     protected $data = [
-        'debug' => false,
+        'debug' => false
     ];
-
 }
