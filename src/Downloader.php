@@ -45,11 +45,9 @@ class Downloader
             mkdir($dir, 0777, true);
         }
 
-        $fh = fopen($save_path, 'w');
-
         $task = [
-            'fh' => $fh,
             'url' => $url,
+            'save_path' => $save_path,
             'retry' => 0
         ];
 
@@ -73,16 +71,17 @@ class Downloader
      */
     protected function addTask($task)
     {
+        $task['lastDown'] = 0;
+        $task['lastTime'] = 0;
+        $task['speed'] = 0;
+        $task['size'] = 0;
+        $task['fh'] = fopen($task['save_path'], 'w');
+
         $ch = HttpClient::prepareCurl('GET', $task['url'], null);
         curl_setopt($ch, CURLOPT_FILE, $task['fh']);
         curl_setopt($ch, CURLOPT_HEADER, false);
         curl_setopt($ch, CURLOPT_NOPROGRESS, false);
         curl_setopt($ch, CURLOPT_PROGRESSFUNCTION, [$this, 'onProgress']);
-
-        $task['lastDown'] = 0;
-        $task['lastTime'] = 0;
-        $task['speed'] = 0;
-        $task['size'] = 0;
 
         $this->taskList[] = $task;
         curl_multi_add_handle($this->multiHandler, $ch);
@@ -98,6 +97,9 @@ class Downloader
                 $task = $this->taskList[$k];
                 unset($this->taskList[$k]);
                 curl_multi_remove_handle($this->multiHandler, $ch);
+                curl_close($ch);
+                fclose($task['fh']);
+                unset($task['fh']);
             }
         }
     }
