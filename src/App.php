@@ -102,6 +102,8 @@ class App
                 'alias' => ['r'],
                 'params' => [['type' => 'array', 'data_type' => 'int']]
             ]
+        ],
+        'help' => [
         ]
     ];
     const API_URL = 'https://api.modpacks.ch/public/';
@@ -137,7 +139,6 @@ class App
             }
 
             $this->console->reset()->print($msg);
-            $this->printHelp();
         }
     }
 
@@ -460,6 +461,11 @@ class App
         }
 
         $this->console->reset();
+    }
+
+    protected function doHelp()
+    {
+        $this->printHelp();
     }
 
     //////////////////////////////////////////
