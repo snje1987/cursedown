@@ -718,7 +718,7 @@ class App
 
         $curse = $pack_info['curse'];
 
-        if (!is_array($curse['modify'])) {
+        if (!isset($curse['modify']) || !is_array($curse['modify'])) {
             $curse['modify'] = [];
         }
 
