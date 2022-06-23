@@ -1,6 +1,7 @@
 /nbproject/private/
 /vendor/
-/vendor-bin/
+/vendor-bin/*/*
+!/vendor-bin/*/composer.json
+!/vendor-bin/*/composer.lock
 /build/
 /tmp/
-/composer.lock

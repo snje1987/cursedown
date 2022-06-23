@@ -15,18 +15,20 @@ jobs:
         with:
           BOX_VERSION: '3.16.0'
 
+      - name: Validate composer.json and composer.lock
+        run: composer validate --no-check-publish --strict
+
       - name: Install dependencies
         run: |
           composer install --prefer-dist --no-progress
-          composer bin box require --dev humbug/box
 
       - name: Build Application PHAR
-        run: ./vendor/bin/box compile
+        run: composer run-script build
 
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           prerelease: false
           files: |
-            LICENSE.txt
+            COPYING
             build/cursedown.phar

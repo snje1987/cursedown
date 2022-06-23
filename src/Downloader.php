@@ -61,8 +61,14 @@ class Downloader
         }
     }
 
+    /**
+     * @return null
+     */
     public function flush()
     {
+        if ($this->multiHandler === null) {
+            return;
+        }
         $this->doDownload(true);
     }
 
@@ -208,6 +214,7 @@ class Downloader
         if (count($this->taskList) <= 0) {
             curl_multi_close($this->multiHandler);
             $this->console->reset();
+            $this->multiHandler = null;
         }
     }
 
