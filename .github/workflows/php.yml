@@ -12,8 +12,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-        with:
-          BOX_VERSION: '3.16.0'
 
       - name: Validate composer.json and composer.lock
         run: composer validate --no-check-publish --strict
