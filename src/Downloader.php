@@ -26,7 +26,10 @@ class Downloader
 {
     /**
      * @param $url
+     * @param $save_path
+     * @param $onFinished
      * @param $flush
+     * @return null
      */
     public function download($url, $save_path, $flush = false)
     {
@@ -48,7 +51,8 @@ class Downloader
         $task = [
             'url' => $url,
             'save_path' => $save_path,
-            'retry' => 0
+            'retry' => 0,
+            'redirect' => 0
         ];
 
         $this->addTask($task);
@@ -141,10 +145,77 @@ class Downloader
     }
 
     /**
+     * @param $ch
+     * @param $info
+     */
+    protected function downloadRetry($ch, $info)
+    {
+        $msg = curl_error($ch);
+        $task = $this->getTask($info['url']);
+        $this->rmTask($info['url'], $ch);
+
+        if ($task['retry'] >= self::MAX_RETRY) {
+            if (is_callable($this->onFinished)) {
+                call_user_func($this->onFinished, $info['url'], self::TASK_RESULT_ERROR, $msg);
+            } else {
+                throw new Exception("下载出错: " . $info['url'] . ' ' . $msg);
+            }
+        }
+
+        $task['retry']++;
+        $task['redirect'] = 0;
+        $this->addTask($task);
+    }
+
+    /**
+     * @param $ch
+     * @param $info
+     */
+    protected function downloadFinshed($ch, $info)
+    {
+        $task = $this->getTask($info['url']);
+        $this->updateSpeed($info['url'], $task, $info['download_content_length'], $info['download_content_length']);
+
+        $this->rmTask($info['url'], $ch);
+
+        if (is_callable($this->onFinished)) {
+            call_user_func($this->onFinished, $info['url'], self::TASK_RESULT_OK);
+        }
+    }
+
+    /**
+     * @param $ch
+     * @param $info
+     */
+    protected function downloadRedirect($ch, $info)
+    {
+        $task = $this->getTask($info['url']);
+        $this->rmTask($info['url'], $ch);
+
+        if ($task['redirect'] >= self::MAX_REDIRECT) {
+            if (is_callable($this->onFinished)) {
+                call_user_func($this->onFinished, $info['url'], self::TASK_RESULT_ERROR, '重定向次数过多');
+            } else {
+                throw new Exception("重定向过多: " . $info['url']);
+            }
+        } else {
+            $new_url = $info['redirect_url'];
+            $task['url'] = $new_url;
+            $task['redirect']++;
+
+            $this->addTask($task);
+        }
+    }
+
+    /**
      * @param $flush
      */
     protected function doDownload($flush)
     {
+        if ($this->isRunning) {
+            return;
+        }
+        $this->isRunning = true;
         do {
             $status = curl_multi_exec($this->multiHandler, $active);
             if ($active) {
@@ -156,48 +227,12 @@ class Downloader
                 $info = curl_getinfo($ch);
 
                 $error = curl_errno($ch);
-                if ($error !== 0) {
-                    $msg = curl_error($ch);
-                    $task = $this->getTask($info['url']);
-                    $this->rmTask($info['url'], $ch);
-                    if ($task['retry'] >= self::MAX_RETRY) {
-                        throw new Exception("下载出错: " . $info['url'] . ' ' . $msg);
-                    }
-                    $task['retry']++;
-                    $this->console->print('重试 ' . $task['retry'] . '/' . self::MAX_RETRY . ': ' . $task['url']);
-                    $this->addTask($task);
-
-                    continue;
-                }
-
-                if ($read['result'] !== CURLE_OK) {
-                    $task = $this->getTask($info['url']);
-                    $this->rmTask($info['url'], $ch);
-                    if ($task['retry'] >= self::MAX_RETRY) {
-                        throw new Exception("下载出错: " . $info['url']);
-                    }
-                    $task['retry']++;
-                    $this->console->print('重试 ' . $task['retry'] . '/' . self::MAX_RETRY . ': ' . $task['url']);
-                    $this->addTask($task);
-
-                    continue;
-                }
-
-                if (!empty($info['redirect_url'])) {
-                    $task = $this->getTask($info['url']);
-                    if ($task['retry'] >= self::MAX_REDIRECT) {
-                        throw new Exception("重定向过多: " . $info['url']);
-                        $this->rmTask($info['url'], $ch);
-                    } else {
-                        $new_url = $info['redirect_url'];
-
-                        $this->rmTask($info['url'], $ch);
-                        $task['url'] = $new_url;
-                        $task['retry']++;
-                        $this->addTask($task);
-                    }
+                if ($error !== 0 || $read['result'] !== CURLE_OK) {
+                    $this->downloadRetry($ch, $info);
+                } elseif (!empty($info['redirect_url'])) {
+                    $this->downloadRedirect($ch, $info);
                 } else {
-                    $this->rmTask($info['url'], $ch);
+                    $this->downloadFinshed($ch, $info);
                 }
             }
 
@@ -213,9 +248,10 @@ class Downloader
 
         if (count($this->taskList) <= 0) {
             curl_multi_close($this->multiHandler);
-            $this->console->reset();
             $this->multiHandler = null;
         }
+
+        $this->isRunning = false;
     }
 
     /**
@@ -235,11 +271,20 @@ class Downloader
         $key = $this->getTaskKey($info['url']);
         $task = $this->taskList[$key];
 
+        $this->updateSpeed($key, $task, $total_down, $down);
+    }
+
+    /**
+     * @param $now
+     * @return null
+     */
+    protected function updateSpeed($key, $task, $total_down, $down)
+    {
+        $now = time();
+
         if ($task['lastTime'] == 0) {
             $this->totalSize += $total_down;
         }
-
-        $now = time();
 
         if ($task['lastDown'] != $down) {
             $this->totalDownload += $down - $task['lastDown'];
@@ -248,34 +293,23 @@ class Downloader
             $this->taskList[$key] = $task;
         }
 
-        if ($this->lastTime < $now) {
-            $newDownload = $this->totalDownload - $this->lastDownload;
-            $this->lastDownload = $this->totalDownload;
-            $this->speed = bcdiv($newDownload, $now - $this->lastTime, 2);
-            $this->lastTime = $now;
-
-            $this->showSpeed();
-        }
-    }
-
-    /**
-     * @return null
-     */
-    protected function showSpeed()
-    {
-        $now = time();
-        if ($this->lastShow >= $now) {
+        if ($this->lastTime >= $now || !is_callable($this->showProgress)) {
             return;
         }
-        $this->lastShow = $now;
+
+        $newDownload = $this->totalDownload - $this->lastDownload;
+        $this->lastDownload = $this->totalDownload;
+        $this->speed = bcdiv($newDownload, $now - $this->lastTime, 2);
+        $this->lastTime = $now;
+
         $count = count($this->taskList);
 
         if ($this->totalSize > 0) {
             $msg = '[' . $count . '/' . $this->maxTask . '] [' . self::showSize($this->totalDownload) . '/' . self::showSize($this->totalSize) . ' ' . bcdiv($this->totalDownload * 100, $this->totalSize, 2) . '% ' . self::showSize($this->speed) . '/s]';
-            $this->console->setStatus($msg);
+            call_user_func($this->showProgress, $msg);
         } elseif ($this->totalDownload > 0) {
             $msg = '[' . $count . '/' . $this->maxTask . '] [' . self::showSize($this->totalDownload) . ' ' . self::showSize($this->speed) . '/s]';
-            $this->console->setStatus($msg);
+            call_user_func($this->showProgress, $msg);
         }
     }
 
@@ -290,12 +324,11 @@ class Downloader
     /////////////////////////////////////////////////////
 
     /**
-     * @param $console
+     * @param $maxTask
      */
-    public function __construct($console, $maxTask = 5)
+    public function __construct($maxTask = 5)
     {
         HttpClient::init();
-        $this->console = $console;
         $this->maxTask = $maxTask;
     }
 
@@ -308,11 +341,6 @@ class Downloader
      */
     protected $maxTask = 5;
 
-    /**
-     *
-     * @var Console
-     */
-    protected $console;
     /**
      * @var array
      */
@@ -341,8 +369,21 @@ class Downloader
      * @var int
      */
     protected $speed = 0;
+
     /**
-     * @var int
+     * @var mixed
      */
-    protected $lastShow = 0;
+    protected $isRunning = false;
+
+    /**
+     * @var mixed
+     */
+    public $showProgress = null;
+    /**
+     * @var mixed
+     */
+    public $onFinished = null;
+
+    const TASK_RESULT_OK = 0;
+    const TASK_RESULT_ERROR = 1;
 }

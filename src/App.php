@@ -54,6 +54,15 @@ class App
      */
     protected $config;
 
+    /**
+     * @var array
+     */
+    protected $errorList = [];
+    /**
+     * @var string
+     */
+    protected $progress = '';
+
     const DEFAULT_ARGS = [
         'search' => [
             'name' => [ //整合包名称
@@ -120,7 +129,9 @@ class App
 
         $this->console = new Console();
         $this->client = new HttpClient($this->console);
-        $this->downloader = new Downloader($this->console, 10);
+        $this->downloader = new Downloader(10);
+        $this->downloader->showProgress = [$this, 'showDownload'];
+        $this->downloader->onFinished = [$this, 'onFileDownloaded'];
     }
 
     /**
@@ -326,6 +337,41 @@ class App
         $this->args = Cmd::getArgs($argv, $cfg);
     }
 
+    /**
+     * @param $url
+     * @param $error
+     * @param $msg
+     */
+    public function onFileDownloaded($url, $error, $msg = '')
+    {
+        if ($error !== Downloader::TASK_RESULT_OK) {
+            $this->addError('下载出错: ' . $url . ' ' . $msg);
+        }
+    }
+
+    /**
+     * @param $msg
+     */
+    public function showDownload($msg)
+    {
+        $this->console->setStatus($this->progress . $msg);
+    }
+
+    /**
+     * @param $msg
+     */
+    protected function addError($msg)
+    {
+        $this->errorList[] = $msg;
+    }
+
+    protected function showError()
+    {
+        foreach ($this->errorList as $msg) {
+            $this->console->print($msg);
+        }
+    }
+
     ////////////////////////////////////////////////
 
     protected function doJob()
@@ -386,6 +432,9 @@ class App
         }
     }
 
+    /**
+     * @return null
+     */
     protected function doDownload()
     {
         if (empty($this->args['path'])) {
@@ -406,6 +455,13 @@ class App
 
         $pack_path = $this->actionDownloadModpack($id, $pack_path, $is_curse);
         $this->actionDownloadDependency($pack_path);
+
+        if (!empty($this->errorList)) {
+            $this->showError();
+
+            return;
+        }
+
         $this->actionRestoreChange($pack_path);
 
         if (file_exists($pack_path . '/overrides_old')) {
@@ -595,10 +651,12 @@ class App
         $total = count($files);
         $i = 0;
         foreach ($files as $file) {
-            $this->actionDownloadFile($pack_path, $file, (++$i) . '/' . $total);
+            $this->progress = '[' . (++$i) . '/' . $total . '] ';
+            $this->actionDownloadFile($pack_path, $file);
         }
 
         $this->downloader->flush();
+        $this->console->reset();
 
         foreach ($files as $file) {
             if ($file['type'] == 'cf-extract') {
@@ -619,7 +677,7 @@ class App
      * @param $file
      * @param $progress
      */
-    protected function actionDownloadFile($pack_path, $file, $progress = '')
+    protected function actionDownloadFile($pack_path, $file)
     {
         if (!file_exists($pack_path)) {
             mkdir($pack_path, 0777, true);
@@ -628,17 +686,13 @@ class App
         $new_dir = $pack_path . '/overrides/';
         $old_dir = $pack_path . '/overrides_old/';
 
-        if ($progress !== '') {
-            $progress = "[$progress] ";
-        }
-
         if ($file['type'] == 'mod' || $file['type'] == 'resource' || $file['type'] == 'config' || $file['type'] == 'script') {
             $new_path = $new_dir . $file['path'] . $file['name'];
             $old_path = $old_dir . $file['path'] . $file['name'];
-            $this->actionDownloadWithCache($file, $new_path, $old_path, $progress);
+            $this->actionDownloadWithCache($file, $new_path, $old_path);
         } elseif ($file['type'] == 'cf-extract') {
             $new_path = $pack_path . '/' . $file['name'];
-            $this->console->print($progress . '下载文件：' . $file['name'] . self::showSize($file['size']));
+            $this->console->print($this->progress . '下载文件：' . $file['name'] . self::showSize($file['size']));
             $this->downloader->download($file['url'], $new_path);
         } else {
             throw new Exception('manifest数据不合法' . $file['type']);
@@ -652,7 +706,7 @@ class App
      * @param $progress
      * @return null
      */
-    protected function actionDownloadWithCache($info, $new_path, $old_path, $progress)
+    protected function actionDownloadWithCache($info, $new_path, $old_path)
     {
         $dir = dirname($new_path);
         if (!file_exists($dir)) {
@@ -660,14 +714,11 @@ class App
         }
 
         if (file_exists($new_path) && self::fileIsOk($info, $new_path)) {
-            $this->console->reset()->print($progress . '文件已存在：' . $info['path'] . $info['name'] . self::showSize($info['size']));
-
             return;
         } elseif (file_exists($old_path) && self::fileIsOk($info, $old_path)) {
-            $this->console->reset()->print($progress . '文件未更新：' . $info['path'] . $info['name'] . self::showSize($info['size']));
             rename($old_path, $new_path);
         } else {
-            $this->console->print($progress . '下载文件：' . $info['path'] . $info['name'] . self::showSize($info['size']));
+            $this->console->print($this->progress . '下载文件：' . $info['path'] . $info['name'] . self::showSize($info['size']));
             $this->downloader->download($info['url'], $new_path);
         }
     }
