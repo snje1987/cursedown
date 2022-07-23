@@ -19,45 +19,36 @@
 
 namespace Org\Snje\Cursedown;
 
-use Org\Snje\Cursedown;
-
 class Config
 {
-    /**
-     * @param $config_file
-     */
-    public function __construct($config_file)
+    public function __construct(string $configFile)
     {
-        $this->config_file = strval($config_file);
+        $this->configFile = strval($configFile);
 
-        if (file_exists($this->config_file)) {
+        if (file_exists($this->configFile)) {
             $this->load();
         }
 
         $this->save();
     }
 
-    public function load()
+    public function load() : void
     {
-        $json = file_get_contents($this->config_file);
+        $json = file_get_contents($this->configFile);
         $data = json_decode($json, true);
 
         $this->mergeConfig($data);
     }
 
-    public function save()
+    public function save() : void
     {
         $json = json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
-        $file = new \Minifw\Common\File($this->config_file);
+        $file = new \Minifw\Common\File($this->configFile);
         $file->putContent($json);
     }
 
-    /**
-     * @param $name
-     * @return mixed
-     */
-    public function get($name)
+    public function get(string $name)
     {
         if (isset($this->data[$name])) {
             return $this->data[$name];
@@ -66,11 +57,7 @@ class Config
         return null;
     }
 
-    /**
-     * @param $name
-     * @param $value
-     */
-    public function set($name, $value)
+    public function set(string $name, $value) : void
     {
         if ($value === null) {
             if (isset($this->data[$name])) {
@@ -83,24 +70,14 @@ class Config
 
     ///////////////////////////////////////
 
-    /**
-     * @param $new_data
-     */
-    protected function mergeConfig($new_data)
+    protected function mergeConfig(array $newData)
     {
-        if (!empty($new_data['debug']) && $new_data['debug']) {
+        if (!empty($newData['debug']) && $newData['debug']) {
             $this->data['debug'] = true;
         }
     }
-
-    /**
-     * @var mixed
-     */
-    protected $config_file;
-    /**
-     * @var array
-     */
-    protected $data = [
+    protected string $configFile;
+    protected array $data = [
         'debug' => false
     ];
 }

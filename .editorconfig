@@ -1,0 +1,6 @@
+[vendor/*]
+php_diagnostic = off
+[vendor-bin/*]
+php_diagnostic = off
+[tmp/*]
+php_diagnostic = off

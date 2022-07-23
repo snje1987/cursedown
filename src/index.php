@@ -31,7 +31,7 @@ if (!defined('APP_ROOT')) {
 }
 
 if (!defined('DATA_DIR')) {
-    $dataDir = getenv("HOME");
+    $dataDir = getenv('HOME');
     if (empty($dataDir)) {
         $dataDir = rtrim(sys_get_temp_dir(), '\\/');
     } else {

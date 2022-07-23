@@ -22,47 +22,21 @@ namespace Org\Snje\Cursedown;
 use Minifw\Common\Exception;
 use Minifw\Console\Cmd;
 use Minifw\Console\Console;
-use Org\Snje\Cursedown;
 
 /**
  * @document_url https://modpacksch.docs.apiary.io/
  */
 class App
 {
-    /**
-     * @var HttpClient
-     */
-    protected $client;
-    /**
-     * @var Downloader
-     */
-    protected $downloader;
-    /**
-     * @var mixed
-     */
-    protected $action;
-    /**
-     * @var mixed
-     */
-    protected $args;
-    /**
-     * @var \Minifw\Console\Console
-     */
-    protected $console;
-    /**
-     * @var mixed
-     */
-    protected $config;
-
-    /**
-     * @var array
-     */
-    protected $errorList = [];
-    /**
-     * @var string
-     */
-    protected $progress = '';
-
+    protected HttpClient $client;
+    protected Downloader $downloader;
+    protected string $action;
+    protected array $args;
+    protected Console $console;
+    protected Config $config;
+    protected array $errorList = [];
+    protected string $progress = '';
+    protected string $lastMsg = '';
     const DEFAULT_ARGS = [
         'search' => [
             'name' => [ //整合包名称
@@ -130,14 +104,11 @@ class App
         $this->console = new Console();
         $this->client = new HttpClient($this->console);
         $this->downloader = new Downloader(10);
-        $this->downloader->showProgress = [$this, 'showDownload'];
-        $this->downloader->onFinished = [$this, 'onFileDownloaded'];
+        $this->downloader->showProgress = \Closure::fromCallable([$this, 'showDownload']);
+        $this->downloader->onFinished = \Closure::fromCallable([$this, 'onFileDownloaded']);
     }
 
-    /**
-     * @param $argv
-     */
-    public function run($argv)
+    public function run(array $argv) : void
     {
         try {
             array_shift($argv);
@@ -155,11 +126,7 @@ class App
 
     /////////////////////////////////////
 
-    /**
-     * @param $path
-     * @param $remove
-     */
-    public static function clearDir($path, $remove = false)
+    public static function clearDir(string $path, bool $remove = false) : void
     {
         if (!is_dir($path)) {
             throw new Exception('参数不合法：' . $path);
@@ -185,12 +152,7 @@ class App
         }
     }
 
-    /**
-     * @param $from
-     * @param $to
-     * @param $includeSub
-     */
-    public static function mergeDir($from, $to, $includeSub = false)
+    public static function mergeDir(string $from, string $to, bool $includeSub = false) : void
     {
         if (!file_exists($to)) {
             mkdir($to, 0777, true);
@@ -225,12 +187,7 @@ class App
         }
     }
 
-    /**
-     * @param $from
-     * @param $to
-     * @param $copy
-     */
-    public static function overrideDir($from, $to, $copy = false)
+    public static function overrideDir(string $from, string $to, bool $copy = false) : void
     {
         if (file_exists($to) && !is_dir($to)) {
             unlink($to);
@@ -290,11 +247,7 @@ class App
         }
     }
 
-    /**
-     * @param $info
-     * @param $path
-     */
-    public static function fileIsOk($info, $path)
+    public static function fileIsOk(array $info, string $path) : bool
     {
         if (!file_exists($path)) {
             return false;
@@ -316,7 +269,7 @@ class App
 
     ///////////////////////////////////
 
-    protected function printHelp()
+    protected function printHelp() : void
     {
         $help_file = APP_ROOT . '/res/help.txt';
 
@@ -325,10 +278,7 @@ class App
         $this->console->print($data);
     }
 
-    /**
-     * @param $argv
-     */
-    protected function parseArgs($argv)
+    protected function parseArgs(array $argv) : void
     {
         $this->action = Cmd::getAction($argv, self::DEFAULT_ARGS);
         array_shift($argv);
@@ -337,35 +287,27 @@ class App
         $this->args = Cmd::getArgs($argv, $cfg);
     }
 
-    /**
-     * @param $url
-     * @param $error
-     * @param $msg
-     */
-    public function onFileDownloaded($url, $error, $msg = '')
+    public function onFileDownloaded(string $url, int $error, string $msg = '') : void
     {
         if ($error !== Downloader::TASK_RESULT_OK) {
             $this->addError('下载出错: ' . $url . ' ' . $msg);
         }
     }
 
-    /**
-     * @param $msg
-     */
-    public function showDownload($msg)
+    public function showDownload(?string $msg = null) : void
     {
-        $this->console->setStatus($this->progress . $msg);
+        if ($msg !== null) {
+            $this->lastMsg = $msg;
+        }
+        $this->console->setStatus($this->progress . $this->lastMsg);
     }
 
-    /**
-     * @param $msg
-     */
-    protected function addError($msg)
+    protected function addError(string $msg) : void
     {
         $this->errorList[] = $msg;
     }
 
-    protected function showError()
+    protected function showError() : void
     {
         foreach ($this->errorList as $msg) {
             $this->console->print($msg);
@@ -374,13 +316,13 @@ class App
 
     ////////////////////////////////////////////////
 
-    protected function doJob()
+    protected function doJob() : void
     {
         $function = 'do' . ucfirst($this->action);
         call_user_func([$this, $function]);
     }
 
-    protected function doSearch()
+    protected function doSearch() : void
     {
         if (empty($this->args['name'])) {
             throw new Exception('必须指定参数[name]');
@@ -408,7 +350,7 @@ class App
         }
     }
 
-    protected function doModify()
+    protected function doModify() : void
     {
         if ($this->args['path'] === '.') {
             $this->args['path'] = Cmd::getFullPath('.');
@@ -432,10 +374,7 @@ class App
         }
     }
 
-    /**
-     * @return null
-     */
-    protected function doDownload()
+    protected function doDownload() : void
     {
         if (empty($this->args['path'])) {
             throw new Exception('参数[path]不能为空');
@@ -471,7 +410,7 @@ class App
         rename($pack_path . '/manifest_new.json', $pack_path . '/manifest.json');
     }
 
-    protected function doInfo()
+    protected function doInfo() : void
     {
         if (empty($this->args['id'])) {
             throw new Exception('必须指定ID');
@@ -519,24 +458,18 @@ class App
         $this->console->reset();
     }
 
-    protected function doHelp()
+    protected function doHelp() : void
     {
         $this->printHelp();
     }
 
     //////////////////////////////////////////
 
-    /**
-     * @param $id
-     * @param $pack_dir
-     * @param $is_curse
-     * @return mixed
-     */
-    protected function actionDownloadModpack($id, $pack_dir, $is_curse)
+    protected function actionDownloadModpack(?string $id, string $packDir, ?bool $isCurse) : string
     {
         $curse_old = [];
 
-        $info_file = $pack_dir . '/curse.json';
+        $info_file = $packDir . '/curse.json';
         if (file_exists($info_file)) {
             $json = file_get_contents($info_file);
             $curse_old = json_decode($json, true);
@@ -554,15 +487,15 @@ class App
             }
         }
 
-        if ($is_curse === null) {
+        if ($isCurse === null) {
             if (!empty($curse_old) && isset($curse_old['is_curse'])) {
-                $is_curse = $curse_old['is_curse'];
+                $isCurse = $curse_old['is_curse'];
             } else {
-                $is_curse = false;
+                $isCurse = false;
             }
         }
 
-        if ($is_curse) {
+        if ($isCurse) {
             $url = self::API_URL . 'curseforge/' . $id;
         } else {
             $url = self::API_URL . 'modpack/' . $id;
@@ -592,7 +525,7 @@ class App
             throw new Exception('未找到可下载的文件');
         }
 
-        if ($is_curse) {
+        if ($isCurse) {
             $url = self::API_URL . 'curseforge/' . $id;
         } else {
             $url = self::API_URL . 'modpack/' . $id;
@@ -608,8 +541,8 @@ class App
             throw new Exception('信息获取失败');
         }
 
-        if (!file_exists($pack_dir)) {
-            mkdir($pack_dir, 0777, true);
+        if (!file_exists($packDir)) {
+            mkdir($packDir, 0777, true);
         }
 
         $this->console->reset();
@@ -617,9 +550,9 @@ class App
         $curse = $curse_old;
         $curse['id'] = strval($id);
         $curse['file_id'] = $new_file_id;
-        $curse['is_curse'] = $is_curse;
+        $curse['is_curse'] = $isCurse;
 
-        $new_path = $pack_dir . '/overrides';
+        $new_path = $packDir . '/overrides';
 
         if (is_dir($new_path)) {
             $old_path = $new_path . '_old';
@@ -628,18 +561,15 @@ class App
             }
         }
 
-        file_put_contents($pack_dir . '/manifest_new.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        file_put_contents($pack_dir . '/curse_new.json', json_encode($curse, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        file_put_contents($packDir . '/manifest_new.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        file_put_contents($packDir . '/curse_new.json', json_encode($curse, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
-        return $pack_dir;
+        return $packDir;
     }
 
-    /**
-     * @param $pack_path
-     */
-    protected function actionDownloadDependency($pack_path)
+    protected function actionDownloadDependency(string $packPath) : void
     {
-        $pack_info = self::loadPackInfo($pack_path, true);
+        $pack_info = self::loadPackInfo($packPath, true);
 
         $mainfest = $pack_info['manifest'];
         $curse = $pack_info['curse'];
@@ -652,7 +582,7 @@ class App
         $i = 0;
         foreach ($files as $file) {
             $this->progress = '[' . (++$i) . '/' . $total . '] ';
-            $this->actionDownloadFile($pack_path, $file);
+            $this->actionDownloadFile($packPath, $file);
         }
 
         $this->downloader->flush();
@@ -660,74 +590,60 @@ class App
 
         foreach ($files as $file) {
             if ($file['type'] == 'cf-extract') {
-                $new_path = $pack_path . '/' . $file['name'];
+                $new_path = $packPath . '/' . $file['name'];
                 $this->console->print('解压文件: ' . $file['name']);
 
                 $zip = new \ZipArchive();
                 $zip->open($new_path);
-                $zip->extractTo($pack_path . '/' . $file['path']);
+                $zip->extractTo($packPath . '/' . $file['path']);
 
                 $this->console->print('文件解压完成：' . $file['name']);
             }
         }
     }
 
-    /**
-     * @param $pack_path
-     * @param $file
-     * @param $progress
-     */
-    protected function actionDownloadFile($pack_path, $file)
+    protected function actionDownloadFile(string $packPath, array $file) : void
     {
-        if (!file_exists($pack_path)) {
-            mkdir($pack_path, 0777, true);
+        if (!file_exists($packPath)) {
+            mkdir($packPath, 0777, true);
         }
 
-        $new_dir = $pack_path . '/overrides/';
-        $old_dir = $pack_path . '/overrides_old/';
+        $new_dir = $packPath . '/overrides/';
+        $old_dir = $packPath . '/overrides_old/';
 
         if ($file['type'] == 'mod' || $file['type'] == 'resource' || $file['type'] == 'config' || $file['type'] == 'script') {
             $new_path = $new_dir . $file['path'] . $file['name'];
             $old_path = $old_dir . $file['path'] . $file['name'];
+            $this->showDownload(null);
             $this->actionDownloadWithCache($file, $new_path, $old_path);
         } elseif ($file['type'] == 'cf-extract') {
-            $new_path = $pack_path . '/' . $file['name'];
-            $this->console->print($this->progress . '下载文件：' . $file['name'] . self::showSize($file['size']));
+            $new_path = $packPath . '/' . $file['name'];
+            $this->console->print('下载文件：' . $file['name'] . self::showSize($file['size']));
+            $this->showDownload(null);
             $this->downloader->download($file['url'], $new_path);
         } else {
             throw new Exception('manifest数据不合法' . $file['type']);
         }
     }
 
-    /**
-     * @param $info
-     * @param $new_path
-     * @param $old_path
-     * @param $progress
-     * @return null
-     */
-    protected function actionDownloadWithCache($info, $new_path, $old_path)
+    protected function actionDownloadWithCache(array $info, string $newPath, string $oldPath) : void
     {
-        $dir = dirname($new_path);
+        $dir = dirname($newPath);
         if (!file_exists($dir)) {
             mkdir($dir, 0755, true);
         }
 
-        if (file_exists($new_path) && self::fileIsOk($info, $new_path)) {
+        if (file_exists($newPath) && self::fileIsOk($info, $newPath)) {
             return;
-        } elseif (file_exists($old_path) && self::fileIsOk($info, $old_path)) {
-            rename($old_path, $new_path);
+        } elseif (file_exists($oldPath) && self::fileIsOk($info, $oldPath)) {
+            rename($oldPath, $newPath);
         } else {
-            $this->console->print($this->progress . '下载文件：' . $info['path'] . $info['name'] . self::showSize($info['size']));
-            $this->downloader->download($info['url'], $new_path);
+            $this->console->print('下载文件：' . $info['path'] . $info['name'] . self::showSize($info['size']));
+            $this->downloader->download($info['url'], $newPath);
         }
     }
 
-    /**
-     * @param $pack_path
-     * @return null
-     */
-    protected function actionRestoreChange($pack_path)
+    protected function actionRestoreChange(string $pack_path) : void
     {
         $new_dir = $pack_path . '/overrides/';
         $old_dir = $pack_path . '/overrides_old/';
@@ -759,13 +675,9 @@ class App
 
     //////////////////////////////////////////////////////
 
-    /**
-     * @param $pack_path
-     * @param array $rm
-     */
-    protected function actionDependencyModify($pack_path, $rm = [])
+    protected function actionDependencyModify(string $packPath, array $rm = []) : void
     {
-        $pack_info = self::loadPackInfo($pack_path);
+        $pack_info = self::loadPackInfo($packPath);
 
         $curse = $pack_info['curse'];
 
@@ -780,19 +692,14 @@ class App
             ];
         }
 
-        file_put_contents($pack_path . '/curse.json', json_encode($curse, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        file_put_contents($packPath . '/curse.json', json_encode($curse, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
 
         $this->console->print('编辑完成');
     }
 
     ////////////////////////////////////////////////////////////////////
 
-    /**
-     * @param $origin
-     * @param $curse
-     * @return mixed
-     */
-    protected static function praseDependency($origin, $curse)
+    protected static function praseDependency(array $origin, array $curse) : array
     {
         $deps = [];
 
@@ -813,16 +720,12 @@ class App
         return $deps;
     }
 
-    /**
-     * @param $pack_path
-     * @param $is_new
-     */
-    protected static function loadPackInfo($pack_path, $is_new = false)
+    protected static function loadPackInfo(string $packPath, bool $isNew = false) : array
     {
-        if ($is_new) {
-            $curse_path = $pack_path . '/curse_new.json';
+        if ($isNew) {
+            $curse_path = $packPath . '/curse_new.json';
         } else {
-            $curse_path = $pack_path . '/curse.json';
+            $curse_path = $packPath . '/curse.json';
         }
 
         $json = file_get_contents($curse_path);
@@ -832,10 +735,10 @@ class App
             throw new Exception('curse.json格式错误');
         }
 
-        if ($is_new) {
-            $file_path = $pack_path . '/manifest_new.json';
+        if ($isNew) {
+            $file_path = $packPath . '/manifest_new.json';
         } else {
-            $file_path = $pack_path . '/manifest.json';
+            $file_path = $packPath . '/manifest.json';
         }
 
         $json = file_get_contents($file_path);
@@ -857,10 +760,7 @@ class App
 
     ///////////////////////////////////////////////////////////////////
 
-    /**
-     * @param $size
-     */
-    public static function showSize($size)
+    public static function showSize(int $size) : string
     {
         return " \033[32m[" . HttpClient::showSize($size) . "\033[0m]";
     }

@@ -20,17 +20,11 @@
 namespace Org\Snje\Cursedown;
 
 use Minifw\Common\Exception;
-use Org\Snje\Cursedown;
+use Minifw\Console\Console;
 
 class HttpClient
 {
-    /**
-     * @param $url
-     * @param array $param
-     * @param $return_type
-     * @return mixed
-     */
-    public function get($url, $param = [], $return_type = 'raw')
+    public function get(string $url, array $param = [], string $return_type = 'raw') : array
     {
         if (!empty($param)) {
             $param = http_build_query($param);
@@ -48,16 +42,11 @@ class HttpClient
                 $this->console->reset()->print('下载失败，正在重试' . ($i + 1) . '/' . self::MAX_RETRY);
             }
         }
+
+        throw new Exception('文件下载失败');
     }
 
-    /**
-     * @param $method
-     * @param $url
-     * @param $body
-     * @param $return_type
-     * @return mixed
-     */
-    public static function doRequest($method, $url, $body, $return_type)
+    public static function doRequest(string $method, string $url, ?array $body, string $return_type) : array
     {
         $ch = self::prepareCurl($method, $url, $body);
 
@@ -74,13 +63,7 @@ class HttpClient
         return self::parseResult($result, $content, $return_type);
     }
 
-    /**
-     * @param $method
-     * @param $url
-     * @param $body
-     * @return mixed
-     */
-    public static function prepareCurl($method, $url, $body)
+    public static function prepareCurl(string $method, string $url, ?array $body)
     {
         $ch = curl_init();
         $options = [
@@ -120,13 +103,7 @@ class HttpClient
         return $ch;
     }
 
-    /**
-     * @param $result
-     * @param $content
-     * @param $return_type
-     * @return mixed
-     */
-    public static function parseResult($result, $content, $return_type)
+    public static function parseResult(array $result, string $content, string $return_type) : array
     {
         if (preg_match_all('/Set-Cookie:(.*);/iU', $content, $matches)) {
             $result['cookie'] = substr(implode(';', $matches[1]), 1);
@@ -163,20 +140,14 @@ class HttpClient
 
     ////////////////////////////////////////////////
 
-    /**
-     * @param $size
-     */
-    public static function showSize($size)
+    public static function showSize(int $size) : string
     {
         return \Minifw\Common\Utils::showSize($size);
     }
 
     /////////////////////////////////////////////////////
 
-    /**
-     * @return mixed
-     */
-    public static function init()
+    public static function init() : void
     {
         if (!file_exists(self::CAROOT) || time() - filemtime(self::CAROOT) > self::UPDATE_OFFSET) {
             try {
@@ -189,36 +160,14 @@ class HttpClient
         }
     }
 
-    /**
-     * @param $console
-     */
-    public function __construct($console)
+    public function __construct(Console $console)
     {
         self::init();
         $this->console = $console;
     }
-
     const CAROOT = DATA_DIR . '/caroot.pem';
     const CAROOT_URL = 'https://curl.se/ca/cacert.pem';
     const UPDATE_OFFSET = 2592000; //7天
     const MAX_RETRY = 3;
-
-    /**
-     * @var mixed
-     */
-    protected $progressTimer;
-    /**
-     * @var int
-     */
-    protected $speed = 0;
-    /**
-     * @var int
-     */
-    protected $lastDown = 0;
-
-    /**
-     *
-     * @var Console
-     */
-    protected $console;
+    protected Console $console;
 }
