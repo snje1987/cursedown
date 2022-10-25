@@ -20,7 +20,6 @@
 namespace Org\Snje\Cursedown\Api;
 
 use Minifw\Common\Exception;
-use Minifw\Console\Utils;
 use Org\Snje\Cursedown\App;
 
 class Modpacks implements Api
@@ -185,16 +184,11 @@ class Modpacks implements Api
         }
 
         $result = [];
-        $skiped = [];
         foreach ($fileHash as $id => $info) {
-            if (empty($info['name']) || empty($info['url'])) {
-                $skiped[] = $info;
-            } else {
-                $result[] = $info;
+            if (empty($info['name'])) {
+                throw new Exception('缺少关键信息');
             }
-        }
-        if (!empty($skiped)) {
-            $this->app->addNotice('缺少下载地址:' . Utils::printJson($skiped, true));
+            $result[] = $info;
         }
 
         return $result;
