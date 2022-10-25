@@ -143,6 +143,7 @@ class Curseforge implements Api
 
     public function updatePackInfo(int $id, string $packPath, array $packInfo) : array
     {
+        $this->app->getConsole()->setStatus('获取整合包信息');
         $url = self::API_URL . '/v1/mods/' . $id;
         $param = [];
         $data = $this->get($url, $param);
@@ -193,6 +194,8 @@ class Curseforge implements Api
             }
 
             $this->app->extractTo($packPath, 'overrides.zip', '.');
+        } else {
+            $this->app->getConsole()->setStatus('整合包文件未更新');
         }
 
         $packInfo['id'] = $id;
@@ -201,6 +204,62 @@ class Curseforge implements Api
         $packInfo['api'] = 'curseforge';
 
         return $packInfo;
+    }
+
+    public function getFile(int $modid, int $fileid)
+    {
+        $url = self::API_URL . '/v1/mods/' . $modid . '/files/' . $fileid;
+        $param = [];
+        $data = $this->get($url, $param);
+        if (!empty($data['body']) && !empty($data['body']['data'])) {
+            return $data['body']['data'];
+        }
+        throw new Exception('获取信息失败');
+    }
+
+    public function getFilesInfo(array $fileIds) : array
+    {
+        $fileHash = [];
+        foreach ($fileIds as $id) {
+            $fileHash[$id] = 1;
+        }
+
+        $url = self::API_URL . '/v1/mods/files';
+        $param = [
+            'fileIds' => $fileIds,
+        ];
+        $data = $this->post($url, $param);
+        $body = $data['body'];
+        if (empty($body['data'])) {
+            throw new Exception('获取文件信息失败');
+        }
+
+        $body = $body['data'];
+        $result = [];
+        foreach ($body as $file) {
+            if (empty($file['id'])) {
+                continue;
+            }
+
+            $id = $file['id'];
+            if (!isset($fileHash[$id])) {
+                continue;
+            }
+
+            $sha = '';
+            if (!empty($file['hashes'])) {
+                foreach ($file['hashes'] as $value) {
+                    if ($value['algo'] == 1) {
+                        $sha = strtolower($value['value']);
+                    }
+                }
+            }
+
+            $file['sha'] = $sha;
+            $result[] = $file;
+        }
+
+        return $result;
     }
 
     public function getFiles(string $packPath) : array
@@ -215,51 +274,40 @@ class Curseforge implements Api
         foreach ($manifest['files'] as $file) {
             $fileIds[] = $file['fileID'];
             $fileHash[$file['fileID']] = [
-                'url' => $file['downloadUrl'],
                 'project' => $file['projectID'],
                 'type' => 'file',
                 'dir' => 'overrides/mods',
             ];
+
+            if (!empty($file['downloadUrl'])) {
+                $fileHash[$file['fileID']]['url'] = $file['downloadUrl'];
+            }
         }
 
-        $url = self::API_URL . '/v1/mods/files';
-        $param = [
-            'fileIds' => $fileIds,
-        ];
-        $data = $this->post($url, $param);
-        $body = $data['body'];
-        if (empty($body['data'])) {
-            throw new Exception('获取文件信息失败');
-        }
-        $body = $body['data'];
+        $body = $this->getFilesInfo($fileIds);
 
         foreach ($body as $file) {
-            if (empty($file['id'])) {
-                continue;
-            }
             $id = $file['id'];
 
-            $sha = '';
-            if (!empty($file['hashes'])) {
-                foreach ($file['hashes'] as $value) {
-                    if ($value['algo'] == 1) {
-                        $sha = strtolower($value['value']);
-                    }
-                }
-            }
-
-            $fileHash[$id]['sha'] = $sha;
+            $fileHash[$id]['sha'] = $file['sha'];
             $fileHash[$id]['name'] = $file['fileName'];
             $fileHash[$id]['size'] = $file['fileLength'];
+            if (!empty($file['downloadUrl'])) {
+                $fileHash[$id]['url'] = $file['downloadUrl'];
+            }
         }
 
         $result = [];
-
+        $skiped = [];
         foreach ($fileHash as $id => $info) {
-            if (empty($info['name']) || empty($info['size'])) {
-                throw new Exception('缺少文件信息:' . Utils::printJson($info, true));
+            if (empty($info['name']) || empty($info['url'])) {
+                $skiped[] = $info;
+            } else {
+                $result[] = $info;
             }
-            $result[] = $info;
+        }
+        if (!empty($skiped)) {
+            $this->app->addNotice('缺少下载地址:' . Utils::printJson($skiped, true));
         }
 
         return $result;

@@ -38,7 +38,9 @@ class App
     protected string $api = '';
     protected string $progress = '';
     protected static ?self $instance = null;
-    const API_LIST = ['curseforge'];
+    protected array $errorList = [];
+    protected array $noticeList = [];
+    const API_LIST = ['curseforge', 'modpacks'];
 
     public static function get(?array $argv = null) : ?self
     {
@@ -262,6 +264,8 @@ class App
         $files = $api->getFiles($packPath);
         $files = self::praseFiles($files, $packInfoNew);
 
+        //Utils::printJson($files);
+
         $i = 0;
         $total = count($files);
 
@@ -299,11 +303,11 @@ class App
         $this->downloader->flush();
         $this->console->reset();
 
-        foreach ($files as $file) {
-            if ($file['type'] == 'extract') {
-                $this->extractTo($packPath, $file['dir'] . '/' . $file['name'], $file['target']);
-            }
-        }
+        // foreach ($files as $file) {
+        //     if ($file['type'] == 'extract') {
+        //         $this->extractTo($packPath, $file['dir'] . '/' . $file['name'], $file['target']);
+        //     }
+        // }
 
         if (!empty($this->errorList)) {
             $this->showError();
@@ -315,6 +319,10 @@ class App
 
         if (file_exists($packPath . '/overrides_old')) {
             self::clearDir($packPath . '/overrides_old', true);
+        }
+
+        if (!empty($this->noticeList)) {
+            $this->showNotice();
         }
     }
 
@@ -386,10 +394,15 @@ class App
         file_put_contents($path, json_encode($packInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
-    protected function addError(string $msg) : void
+    public function addError(string $msg) : void
     {
         $this->console->print($msg);
         $this->errorList[] = $msg;
+    }
+
+    public function addNotice(string $msg) : void
+    {
+        $this->noticeList[] = $msg;
     }
 
     protected function showError() : void
@@ -397,6 +410,15 @@ class App
         foreach ($this->errorList as $msg) {
             $this->console->print($msg);
         }
+        $this->errorList = [];
+    }
+
+    protected function showNotice() : void
+    {
+        foreach ($this->noticeList as $msg) {
+            $this->console->print($msg);
+        }
+        $this->noticeList = [];
     }
 
     protected function restoreChange(string $packPath) : void

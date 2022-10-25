@@ -17,7 +17,7 @@ return [
         ],
         'api' => [
             'alias' => ['a'],
-            'comment' => '使用的api, 可以是curseforge',
+            'comment' => '使用的api, 可以是curseforge或modpacks',
             'default' => '',
             'paramValues' => App::API_LIST,
             'type' => Option::PARAM_ENUM,
