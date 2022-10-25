@@ -19,33 +19,43 @@
 
 namespace Org\Snje\Cursedown;
 
+use Minifw\Common\Exception;
+use Minifw\Common\File;
+use Minifw\Console\Utils;
+
 class Config
 {
-    public function __construct(string $configFile)
+    public function __construct(string $path)
     {
-        $this->configFile = strval($configFile);
+        $this->path = strval($path);
 
-        if (file_exists($this->configFile)) {
+        if (file_exists($this->path)) {
             $this->load();
         }
 
         $this->save();
     }
 
-    public function load() : void
+    public function load() : self
     {
-        $json = file_get_contents($this->configFile);
+        $json = file_get_contents($this->path);
         $data = json_decode($json, true);
 
-        $this->mergeConfig($data);
+        if ($data !== null) {
+            $this->mergeConfig($data);
+        }
+
+        return $this;
     }
 
-    public function save() : void
+    public function save() : self
     {
-        $json = json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        $json = json_encode($this->data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
-        $file = new \Minifw\Common\File($this->configFile);
+        $file = new File($this->path);
         $file->putContent($json);
+
+        return $this;
     }
 
     public function get(string $name)
@@ -57,27 +67,114 @@ class Config
         return null;
     }
 
-    public function set(string $name, $value) : void
+    public function show(string $name) : string
+    {
+        if (isset($this->data[$name])) {
+            $value = $this->data[$name];
+
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+
+        return 'null';
+    }
+
+    public function set(string $name, $value) : self
     {
         if ($value === null) {
             if (isset($this->data[$name])) {
                 unset($this->data[$name]);
             }
-        } else {
-            $this->data[$name] = $value;
+        } elseif (!isset(self::$dataType[$name])) {
+            throw new Exception('配置项不存在: ' . $name);
         }
+
+        switch (self::$dataType[$name]) {
+            case self::TYPE_BOOL:
+                if (!is_bool($value)) {
+                    if (is_string($value)) {
+                        if ($value == 'false' || $value == '0') {
+                            $value = false;
+                        } else {
+                            $value = (bool) $value;
+                        }
+                    } elseif ($value === null) {
+                        $value = false;
+                    } else {
+                        $value = (bool) $value;
+                    }
+                }
+                break;
+            case self::TYPE_STRING:
+                if (!is_string($value)) {
+                    throw new Exception('参数不合法');
+                }
+                break;
+            case self::TYPE_INT:
+                if (!preg_match('/^\\d+$/', $value)) {
+                    throw new Exception('参数不合法');
+                }
+                $value = (int) $value;
+                break;
+            case self::TYPE_FILE:
+                if (!is_string($value)) {
+                    throw new Exception('参数不合法');
+                }
+                if (!file_exists($value)) {
+                    throw new Exception('文件不存在');
+                }
+                $value = Utils::getFullPath($value);
+                break;
+            case self::TYPE_PATH:
+                if (!is_string($value)) {
+                    throw new Exception('参数不合法');
+                }
+                $value = Utils::getFullPath($value);
+                break;
+            case self::TYPE_API:
+                if (!is_string($value)) {
+                    throw new Exception('参数不合法');
+                }
+                if (!in_array($value, self::$apiEnum)) {
+                    throw new Exception('api必须是[' . implode(',', self::$apiEnum) . ']其中之一');
+                }
+                break;
+            default:
+                throw new Exception('参数不合法');
+        }
+
+        $this->data[$name] = $value;
+
+        return $this;
     }
 
     ///////////////////////////////////////
 
-    protected function mergeConfig(array $newData)
+    protected function mergeConfig(array $newData) : void
     {
-        if (!empty($newData['debug']) && $newData['debug']) {
-            $this->data['debug'] = true;
+        foreach (self::$dataType as $name => $type) {
+            if (array_key_exists($name, $newData)) {
+                try {
+                    $this->set($name, $newData[$name]);
+                } catch (Exception $ex) {
+                }
+            }
         }
     }
-    protected string $configFile;
+    protected string $path;
     protected array $data = [
-        'debug' => false
+        'debug' => false,
+        'api' => 'curseforge',
+        'curseforge_api_key' => '$2a$10$2cY0ETeTLhqYpS7wLIqVL.1Dhxr2bMNMki6eT5ZGGb1L4QOxT60QO',
     ];
+    protected static array $dataType = [
+        'debug' => self::TYPE_BOOL,
+        'api' => self::TYPE_API,
+    ];
+    const TYPE_BOOL = 1;
+    const TYPE_STRING = 2;
+    const TYPE_INT = 3;
+    const TYPE_FILE = 4;
+    const TYPE_PATH = 5;
+    const TYPE_API = 6;
+    protected static array $apiEnum = App::API_LIST;
 }

@@ -26,6 +26,10 @@ class Downloader
 {
     public function download(string $url, string $savePath, bool $flush = false) : void
     {
+        if (empty($url)) {
+            return;
+        }
+
         if ($this->multiHandler === null) {
             $this->multiHandler = curl_multi_init();
         }
@@ -52,6 +56,9 @@ class Downloader
 
         while (true) {
             if (!$flush && count($this->taskList) < $this->maxTask) {
+                break;
+            }
+            if (count($this->taskList) == 0) {
                 break;
             }
             $this->doDownload($flush);
@@ -174,7 +181,7 @@ class Downloader
 
     protected function doDownload(bool $flush) : void
     {
-        if ($this->isRunning) {
+        if ($this->isRunning || $this->multiHandler === null) {
             return;
         }
         $this->isRunning = true;
@@ -187,8 +194,8 @@ class Downloader
             while (false !== ($read = curl_multi_info_read($this->multiHandler))) {
                 $ch = $read['handle'];
                 $info = curl_getinfo($ch);
-
                 $error = curl_errno($ch);
+
                 if ($error !== 0 || $read['result'] !== CURLE_OK) {
                     $this->downloadRetry($ch, $info);
                 } elseif (!empty($info['redirect_url'])) {
@@ -291,20 +298,8 @@ class Downloader
     protected int $lastDownload = 0;
     protected int $lastTime = 0;
     protected int $speed = 0;
-
-    /**
-     * @var mixed
-     */
     protected bool $isRunning = false;
-
-    /**
-     * @var mixed
-     */
     public ?Closure $showProgress = null;
-
-    /**
-     * @var mixed
-     */
     public ?Closure $onFinished = null;
     const TASK_RESULT_OK = 0;
     const TASK_RESULT_ERROR = 1;

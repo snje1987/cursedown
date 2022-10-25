@@ -19,12 +19,12 @@
 
 namespace Org\Snje\Cursedown;
 
+use Closure;
 use Minifw\Common\Exception;
-use Minifw\Console\Console;
 
 class HttpClient
 {
-    public function get(string $url, array $param = [], string $return_type = 'raw') : array
+    public function get(string $url, array $param = [], string $return_type = 'raw', array $option = []) : array
     {
         if (!empty($param)) {
             $param = http_build_query($param);
@@ -33,22 +33,43 @@ class HttpClient
 
         for ($i = 1; $i <= self::MAX_RETRY; $i++) {
             try {
-                return self::doRequest('GET', $url, [], $return_type);
+                return self::doRequest('GET', $url, [], $return_type, $option);
             } catch (Exception $ex) {
                 if ($i >= self::MAX_RETRY) {
                     throw $ex;
                 }
 
-                $this->console->reset()->print('下载失败，正在重试' . ($i + 1) . '/' . self::MAX_RETRY);
+                if ($this->onError !== null) {
+                    call_user_func($this->onError, '下载失败，正在重试' . ($i + 1) . '/' . self::MAX_RETRY);
+                }
             }
         }
 
         throw new Exception('文件下载失败');
     }
 
-    public static function doRequest(string $method, string $url, ?array $body, string $return_type) : array
+    public function post(string $url, $body = [], string $return_type = 'raw', array $option = []) : array
     {
-        $ch = self::prepareCurl($method, $url, $body);
+        for ($i = 1; $i <= self::MAX_RETRY; $i++) {
+            try {
+                return self::doRequest('POST', $url, $body, $return_type, $option);
+            } catch (Exception $ex) {
+                if ($i >= self::MAX_RETRY) {
+                    throw $ex;
+                }
+
+                if ($this->onError !== null) {
+                    call_user_func($this->onError, '下载失败，正在重试' . ($i + 1) . '/' . self::MAX_RETRY);
+                }
+            }
+        }
+
+        throw new Exception('文件下载失败');
+    }
+
+    public static function doRequest(string $method, string $url, $body, string $return_type, array $option = []) : array
+    {
+        $ch = self::prepareCurl($method, $url, $body, $option);
 
         $content = curl_exec($ch);
         $error = curl_errno($ch);
@@ -63,7 +84,7 @@ class HttpClient
         return self::parseResult($result, $content, $return_type);
     }
 
-    public static function prepareCurl(string $method, string $url, ?array $body)
+    public static function prepareCurl(string $method, string $url, $body, array $option = [])
     {
         $ch = curl_init();
         $options = [
@@ -90,13 +111,13 @@ class HttpClient
             $options[CURLOPT_PROXY] = $proxy;
         }
 
-        $header = [];
-
         if (!empty($body)) {
             $options[CURLOPT_POSTFIELDS] = $body;
         }
 
-        $options[CURLOPT_HTTPHEADER] = $header;
+        if (!empty($option['header'])) {
+            $options[CURLOPT_HTTPHEADER] = $option['header'];
+        }
 
         curl_setopt_array($ch, $options);
 
@@ -160,14 +181,13 @@ class HttpClient
         }
     }
 
-    public function __construct(Console $console)
+    public function __construct()
     {
         self::init();
-        $this->console = $console;
     }
+    public ?Closure $onError = null;
     const CAROOT = DATA_DIR . '/caroot.pem';
     const CAROOT_URL = 'https://curl.se/ca/cacert.pem';
     const UPDATE_OFFSET = 2592000; //7天
     const MAX_RETRY = 3;
-    protected Console $console;
 }
