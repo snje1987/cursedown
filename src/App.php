@@ -208,9 +208,25 @@ class App
 
     protected function doInfo() : void
     {
+        $packPath = $this->options['path'];
+        $id = $this->options['id'];
+
+        if (!empty($packPath)) {
+            $packinfo = $this->loadPackInfo($packPath . '/packinfo.json');
+            if (empty($packinfo['api'])) {
+                throw new Exception('指定目录不是一个整合包目录');
+            }
+            $id = $packinfo['id'];
+            $this->api = $packinfo['api'];
+        }
+
+        if (empty($id)) {
+            throw new Exception('未指定整合包ID');
+        }
+
         $api = $this->getApi();
 
-        $data = $api->info($this->options['id']);
+        $data = $api->info($id);
         if (empty($data)) {
             $this->console->print('未找到搜索结果');
         } else {

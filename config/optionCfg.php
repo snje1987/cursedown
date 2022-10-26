@@ -53,13 +53,19 @@ return [
             ]
         ],
         'info' => [
-            'comment' => ['获取整合包描述'],
+            'comment' => ['获取整合包信息'],
             'options' => [
                 'id' => [
-                    'default' => null,
+                    'default' => '',
                     'alias' => 'id',
                     'comment' => '整合包ID',
                     'type' => Option::PARAM_STRING,
+                ],
+                'path' => [
+                    'default' => '',
+                    'alias' => 'p',
+                    'comment' => '整合包保存路径',
+                    'type' => Option::PARAM_DIR,
                 ],
             ]
         ],
