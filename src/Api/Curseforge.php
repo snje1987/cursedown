@@ -255,6 +255,11 @@ class Curseforge implements Api
             }
 
             $file['sha'] = $sha;
+            if (empty($file['downloadUrl'])) {
+                if ($file['id'] <= 9999999 && $file['id'] >= 1000000) {
+                    $file['downloadUrl'] = 'https://edge.forgecdn.net/files/' . intval($file['id'] / 1000) . '/' . intval($file['id'] % 1000) . '/' . $file['fileName'];
+                }
+            }
             $result[] = $file;
         }
 
