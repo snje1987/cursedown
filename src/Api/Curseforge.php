@@ -26,6 +26,7 @@ class Curseforge implements Api
 {
     //document_url https://docs.curseforge.com/?
     const API_URL = 'https://api.curseforge.com';
+    const MANIFEST_FILE = 'manifest.json';
     protected App $app;
     protected string $api_key;
 
@@ -266,12 +267,14 @@ class Curseforge implements Api
         return $result;
     }
 
-    public function getFiles(string $packPath) : array
+    public function getFiles(string $packPath, array $packInfo) : array
     {
-        $manifest = json_decode(file_get_contents($packPath . '/manifest.json'), true);
+        $manifest = json_decode(file_get_contents($packPath . '/' . self::MANIFEST_FILE), true);
         if (empty($manifest['files'])) {
             throw new Exception('文件列表无效');
         }
+
+        $overrides = $packInfo['overrides'];
 
         $fileIds = [];
         $fileHash = [];
@@ -280,7 +283,7 @@ class Curseforge implements Api
             $fileHash[$file['fileID']] = [
                 'project' => $file['projectID'],
                 'type' => 'file',
-                'dir' => 'overrides/mods',
+                'dir' => $overrides . '/mods',
             ];
 
             if (!empty($file['downloadUrl'])) {

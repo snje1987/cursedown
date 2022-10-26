@@ -75,8 +75,14 @@ return [
                 'id' => [
                     'default' => '',
                     'alias' => 'id',
-                    'comment' => '整合包ID',
+                    'comment' => '整合包ID, 如果是未发布的整合包，可以指定为0',
                     'type' => Option::PARAM_INT,
+                ],
+                'overrides' => [
+                    'default' => '',
+                    'alias' => 'o',
+                    'comment' => '游戏文件保存目录',
+                    'type' => Option::PARAM_STRING,
                 ],
                 'path' => [
                     'default' => null,

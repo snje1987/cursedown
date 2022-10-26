@@ -41,6 +41,8 @@ class App
     protected array $errorList = [];
     protected array $noticeList = [];
     const API_LIST = ['curseforge', 'modpacks'];
+    const PACKINFO_FILE = 'packinfo.json';
+    const OVERRIDES_DEFAULT = 'overrides';
 
     public static function get(?array $argv = null) : ?self
     {
@@ -212,7 +214,7 @@ class App
         $id = $this->options['id'];
 
         if (!empty($packPath)) {
-            $packinfo = $this->loadPackInfo($packPath . '/packinfo.json');
+            $packinfo = $this->loadPackInfo($packPath);
             if (empty($packinfo['api'])) {
                 throw new Exception('指定目录不是一个整合包目录');
             }
@@ -240,6 +242,7 @@ class App
     {
         $packPath = $this->options['path'];
         $id = $this->options['id'];
+        $overrides = $this->options['overrides'];
 
         if (!file_exists($packPath)) {
             mkdir($packPath, 0777, true);
@@ -248,39 +251,51 @@ class App
             throw new Exception('无法创建保存目录');
         }
 
-        $packInfoOld = $this->loadPackInfo($packPath . '/packinfo.json');
+        $packInfo = $this->loadPackInfo($packPath);
 
-        if (empty($packInfoOld['id'])) {
-            if (empty($id)) {
+        if ($packInfo['id'] < 0) {
+            if ($id === '') {
                 throw new Exception('未指定整合包ID');
             }
         } else {
-            if (!empty($id) && $id != $packInfoOld['id']) {
+            if (!empty($id) && $id != $packInfo['id']) {
                 throw new Exception('不能修改已下载整合包的ID');
             }
-            $id = $packInfoOld['id'];
-            if (!empty($packInfoOld['api'])) {
-                $this->api = $packInfoOld['api'];
+            $id = $packInfo['id'];
+            if (!empty($packInfo['api'])) {
+                $this->api = $packInfo['api'];
+            }
+            if (!empty($packInfo['overrides'])) {
+                $overrides = $packInfo['overrides'];
             }
         }
 
-        $overridesPath = $packPath . '/overrides';
-        //如果存在旧文件，则先备份旧文件，以防止丢失自定义修改
-        if (file_exists($overridesPath) && !file_exists($overridesPath . '_old')) {
-            rename($overridesPath, $overridesPath . '_old');
+        if (empty($overrides)) {
+            $overrides = self::OVERRIDES_DEFAULT;
         }
+        $packInfo['overrides'] = $overrides;
 
         $api = $this->getApi();
-        $packInfoNew = $api->updatePackInfo($id, $packPath, $packInfoOld);
-        if (empty($packInfoNew)) {
-            throw new Exception('获取整合包信息失败');
+        if ($id > 0) {
+            $overridesPath = $packPath . '/' . $overrides;
+            //如果存在旧文件，则先备份旧文件，以防止丢失自定义修改
+            if (file_exists($overridesPath) && !file_exists($overridesPath . '_old')) {
+                rename($overridesPath, $overridesPath . '_old');
+            }
+
+            $packInfo = $api->updatePackInfo($id, $packPath, $packInfo);
+            if (empty($packInfo)) {
+                throw new Exception('获取整合包信息失败');
+            }
+        } else {
+            $packInfo['id'] = $id;
+            $packInfo['api'] = $this->api;
         }
-        $this->savePackInfo($packPath . '/packinfo.json', $packInfoNew);
+        $this->savePackInfo($packPath, $packInfo);
 
-        $files = $api->getFiles($packPath);
-        $files = self::praseFiles($files, $packInfoNew);
-
+        $files = $api->getFiles($packPath, $packInfo);
         //Utils::printJson($files);
+        $files = self::praseFiles($files, $packInfo);
 
         $i = 0;
         $total = count($files);
@@ -288,7 +303,7 @@ class App
         foreach ($files as $file) {
             $this->progress = '[' . (++$i) . '/' . $total . '] ';
             $save = $packPath . '/' . $file['dir'] . '/' . $file['name'];
-            $old = str_replace('overrides/', 'overrides_old/', $save);
+            $old = str_replace($overrides . '/', $overrides . '_old/', $save);
 
             $dir = dirname($save);
             if (!file_exists($dir)) {
@@ -324,22 +339,18 @@ class App
         $this->downloader->flush();
         $this->console->reset();
 
-        // foreach ($files as $file) {
-        //     if ($file['type'] == 'extract') {
-        //         $this->extractTo($packPath, $file['dir'] . '/' . $file['name'], $file['target']);
-        //     }
-        // }
-
         if (!empty($this->errorList)) {
             $this->showError();
 
             return;
         }
 
-        $this->restoreChange($packPath);
+        if ($id > 0) {
+            $this->restoreChange($packPath, $overrides);
 
-        if (file_exists($packPath . '/overrides_old')) {
-            self::clearDir($packPath . '/overrides_old', true);
+            if (file_exists($packPath . '/' . $overrides . '_old')) {
+                self::clearDir($packPath . '/' . $overrides . '_old', true);
+            }
         }
 
         if (!empty($this->noticeList)) {
@@ -364,7 +375,7 @@ class App
             return;
         }
 
-        $packinfo = self::loadPackInfo($packPath . '/packinfo.json');
+        $packinfo = self::loadPackInfo($packPath);
 
         if (!isset($packinfo['modify']) || !is_array($packinfo['modify'])) {
             $packinfo['modify'] = [];
@@ -377,7 +388,7 @@ class App
             ];
         }
 
-        file_put_contents($packPath . '/packinfo.json', json_encode($packinfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+        $this->savePackInfo($packPath, $packinfo);
     }
 
     //////////////////////
@@ -385,13 +396,15 @@ class App
     {
     }
 
-    protected function loadPackInfo(string $path) : array
+    protected function loadPackInfo(string $packPath) : array
     {
+        $path = $packPath . '/' . self::PACKINFO_FILE;
         if (!file_exists($path)) {
             return [
-                'id' => '',
+                'id' => -1,
                 'api' => '',
                 'sha' => '',
+                'overrides' => '',
             ];
         }
 
@@ -410,8 +423,9 @@ class App
         return $packInfo;
     }
 
-    protected function savePackInfo(string $path, array $packInfo)
+    protected function savePackInfo(string $packPath, array $packInfo)
     {
+        $path = $packPath . '/' . self::PACKINFO_FILE;
         file_put_contents($path, json_encode($packInfo, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
@@ -442,10 +456,10 @@ class App
         $this->noticeList = [];
     }
 
-    protected function restoreChange(string $packPath) : void
+    protected function restoreChange(string $packPath, string $overrides) : void
     {
-        $new_dir = $packPath . '/overrides/';
-        $old_dir = $packPath . '/overrides_old/';
+        $new_dir = $packPath . '/' . $overrides . '/';
+        $old_dir = $packPath . '/' . $overrides . '_old/';
 
         if (!file_exists($old_dir)) {
             return;
@@ -468,7 +482,7 @@ class App
         self::mergeDir($old_dir, $new_dir);
 
         if (file_exists($packPath . '/custom')) {
-            self::overrideDir($packPath . '/custom', $packPath . '/overrides', true);
+            self::overrideDir($packPath . '/custom', $packPath . '/' . $overrides, true);
         }
     }
 

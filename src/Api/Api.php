@@ -29,7 +29,7 @@ interface Api
 
     public function info(int $id) : array;
 
-    public function updatePackInfo(int $id, string $packPath, array $curseInfo) : array;
+    public function updatePackInfo(int $id, string $packPath, array $packInfo) : array;
 
-    public function getFiles(string $packPath) : array;
+    public function getFiles(string $packPath, array $packInfo) : array;
 }

@@ -26,6 +26,7 @@ class Modpacks implements Api
 {
     //document_url https://modpacksch.docs.apiary.io/
     const API_URL = 'https://api.modpacks.ch/public';
+    const MANIFEST_FILE = 'manifest.json';
     protected App $app;
 
     public function __construct(App $app)
@@ -129,7 +130,7 @@ class Modpacks implements Api
         }
 
         $console->reset();
-        file_put_contents($packPath . '/manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
+        file_put_contents($packPath . '/' . self::MANIFEST_FILE, json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
         $packInfo['id'] = $id;
         $packInfo['sha'] = '';
@@ -139,12 +140,14 @@ class Modpacks implements Api
         return $packInfo;
     }
 
-    public function getFiles(string $packPath) : array
+    public function getFiles(string $packPath, array $packInfo) : array
     {
-        $manifest = json_decode(file_get_contents($packPath . '/manifest.json'), true);
+        $manifest = json_decode(file_get_contents($packPath . '/' . self::MANIFEST_FILE), true);
         if (empty($manifest['files'])) {
             throw new Exception('文件列表无效');
         }
+
+        $overrides = $packInfo['overrides'];
 
         $curseIds = [];
         $fileHash = [];
@@ -153,7 +156,7 @@ class Modpacks implements Api
             $fileHash[$file['id']] = [
                 'project' => $file['id'],
                 'type' => 'file',
-                'dir' => 'overrides/' . rtrim($file['path'], '\\/'),
+                'dir' => $overrides . '/' . rtrim($file['path'], '\\/'),
                 'name' => $file['name'],
                 'sha' => $file['sha1'],
                 'size' => $file['size'],
