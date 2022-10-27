@@ -331,7 +331,7 @@ class App
                 $this->addNotice('缺少下载地址:' . Utils::printJson($file, true));
                 continue;
             } else {
-                $this->console->print('下载文件：' . $file['dir'] . '/' . $file['name'] . self::showSize($file['size']));
+                $this->console->print('下载文件：' . $file['url'] . self::showSize($file['size']));
                 $this->downloader->download($file['url'], $save, false);
             }
         }
