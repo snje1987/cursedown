@@ -32,4 +32,6 @@ interface Api
     public function updatePackInfo(int $id, string $packPath, array $packInfo) : array;
 
     public function getFiles(string $packPath, array $packInfo) : array;
+
+    public function checkUpdate(string $packPath, array $packInfo) : array;
 }

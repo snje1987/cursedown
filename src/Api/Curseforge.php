@@ -314,4 +314,51 @@ class Curseforge implements Api
 
         return $result;
     }
+
+    public function checkUpdate(string $packPath, array $packInfo) : array
+    {
+        $result = [];
+        $result['id'] = $packInfo['id'];
+
+        $manifest = json_decode(file_get_contents($packPath . '/' . self::MANIFEST_FILE), true);
+        if (empty($manifest['files'])) {
+            throw new Exception('整合包信息不合法: ' . $packPath);
+        }
+
+        $result['currentVersion'] = $manifest['version'];
+        $result['name'] = $manifest['name'];
+
+        $url = self::API_URL . '/v1/mods/' . $packInfo['id'];
+        $param = [];
+        $data = $this->get($url, $param);
+
+        $body = $data['body'];
+        if (empty($body['data'])) {
+            return [];
+        }
+
+        $body = $body['data'];
+        if (empty($body['latestFiles'])) {
+            $result['latestVersion'] = '';
+            $result['updateTime'] = '';
+        } else {
+            $lastFile = ['id' => 0];
+            foreach ($body['latestFiles'] as $fileInfo) {
+                if ($fileInfo['id'] > $lastFile['id']) {
+                    $lastFile = $fileInfo;
+                }
+            }
+
+            if ($lastFile['id'] <= 0) {
+                $result['latestVersion'] = '';
+                $result['updateTime'] = '';
+            } else {
+                $date = strtotime($lastFile['fileDate']);
+                $result['latestVersion'] = $lastFile['displayName'];
+                $result['updateTime'] = date('Y-m-d', $date);
+            }
+        }
+
+        return $result;
+    }
 }

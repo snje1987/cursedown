@@ -110,6 +110,23 @@ return [
                 ],
             ]
         ],
+        'check' => [
+            'comment' => ['检查整合包更新信息, 用法: cursedown check [选项] [路径] ...'],
+            'options' => [
+                'recursive' => [
+                    'default' => false,
+                    'alias' => 'r',
+                    'comment' => '递归处理子目录',
+                    'type' => Option::PARAM_BOOL,
+                ],
+                'level' => [
+                    'default' => 0,
+                    'alias' => 'l',
+                    'comment' => '递归处理的深度, 0表示无限',
+                    'type' => Option::PARAM_INT,
+                ],
+            ]
+        ],
         'help' => [
             'comment' => '显示本信息',
         ],

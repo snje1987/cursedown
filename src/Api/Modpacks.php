@@ -196,4 +196,48 @@ class Modpacks implements Api
 
         return $result;
     }
+
+    public function checkUpdate(string $packPath, array $packInfo) : array
+    {
+        $result = [];
+        $result['id'] = $packInfo['id'];
+
+        $manifest = json_decode(file_get_contents($packPath . '/' . self::MANIFEST_FILE), true);
+        if (empty($manifest['files'])) {
+            throw new Exception('整合包信息不合法: ' . $packPath);
+        }
+
+        $result['currentVersion'] = $manifest['name'];
+
+        $client = $this->app->getClient();
+        $url = self::API_URL . '/modpack/' . $packInfo['id'];
+
+        $data = $client->get($url, [], 'json');
+        $body = $data['body'];
+
+        if (empty($body)) {
+            $result['name'] = '';
+            $result['latestVersion'] = '';
+            $result['updateTime'] = '';
+        } else {
+            $latest = ['id' => 0];
+            foreach ($body['versions'] as $file) {
+                if ($file['id'] > $latest['id']) {
+                    $latest = $file;
+                }
+            }
+
+            if ($latest['id'] <= 0) {
+                $result['name'] = '';
+                $result['latestVersion'] = '';
+                $result['updateTime'] = '';
+            } else {
+                $result['name'] = $body['name'];
+                $result['latestVersion'] = $file['name'];
+                $result['updateTime'] = date('Y-m-d', $file['updated']);
+            }
+        }
+
+        return $result;
+    }
 }

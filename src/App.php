@@ -20,6 +20,7 @@
 namespace Org\Snje\Cursedown;
 
 use Minifw\Common\Exception;
+use Minifw\Common\File;
 use Minifw\Console\Console;
 use Minifw\Console\OptionParser;
 use Minifw\Console\Utils;
@@ -162,9 +163,18 @@ class App
 
     /////////////////////////////////////
 
-    protected function getApi() : Api
+    protected function getApi(string $name = '') : Api
     {
-        $classname = __NAMESPACE__ . '\\Api\\' . ucfirst($this->api);
+        $api = $this->api;
+        if (!empty($name)) {
+            $api = $name;
+        }
+
+        if (!in_array($api, self::API_LIST)) {
+            throw new Exception('api不存在');
+        }
+
+        $classname = __NAMESPACE__ . '\\Api\\' . ucfirst($api);
         $obj = new $classname($this);
 
         return $obj;
@@ -389,6 +399,59 @@ class App
         }
 
         $this->savePackInfo($packPath, $packinfo);
+    }
+
+    protected function doCheck() : void
+    {
+        if (empty($this->input)) {
+            throw new Exception('未输入整合包路径');
+        }
+
+        $input = $this->input;
+        $recursive = $this->options['recursive'];
+        $level = $this->options['level'];
+
+        $result = [];
+
+        foreach ($input as $opath) {
+            if (!file_exists($opath)) {
+                throw new Exception('路径不存在: ' . $opath);
+            }
+            $path = Utils::getFullPath($opath);
+            $file = new File($path);
+
+            $file->walk(function (File $file, string $prefix) use (&$result) {
+                $packInfo = $this->loadPackInfo($file->getFsPath());
+                if (empty($packInfo['api'])) {
+                    return true;
+                } else {
+                    if ($packInfo['id'] <= 0) {
+                        return false;
+                    }
+
+                    $this->console->setStatus('正在检查整合包: ' . $prefix);
+                    $api = $this->getApi($packInfo['api']);
+                    $info = $api->checkUpdate($file->getFsPath(), $packInfo);
+                    $info['dir'] = $file->getName();
+                    $result[] = $info;
+                }
+            }, '', $recursive, $level, File::LOOP_TARGET_DIR);
+        }
+
+        $this->console->reset();
+
+        usort($result, function ($left, $right) {
+            return strcmp($right['updateTime'], $left['updateTime']);
+        });
+
+        $cols = [
+            //'id' => ['name' => 'ID', 'align' => 'left'],
+            'dir' => ['name' => '名称', 'align' => 'left'],
+            'currentVersion' => ['name' => '当前版本', 'align' => 'left'],
+            'latestVersion' => ['name' => '最新版本', 'align' => 'left'],
+            'updateTime' => ['name' => '更新时间', 'align' => 'left'],
+        ];
+        $this->console->print(Utils::printTable($cols, $result, [], '', true));
     }
 
     //////////////////////
