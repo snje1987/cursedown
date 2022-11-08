@@ -132,6 +132,16 @@ class Modpacks implements Api
         $console->reset();
         file_put_contents($packPath . '/' . self::MANIFEST_FILE, json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
+        if (!empty($manifest['changelog'])) {
+            $url = $manifest['changelog'];
+            $data = $client->get($url, [], 'json');
+            $json = $data['body'];
+
+            if (!empty($json['content'])) {
+                file_put_contents($packPath . '/changelog.txt', $json['content']);
+            }
+        }
+
         $packInfo['id'] = $id;
         $packInfo['sha'] = '';
         $packInfo['file_id'] = $newFileId;

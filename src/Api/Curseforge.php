@@ -198,6 +198,14 @@ class Curseforge implements Api
             $this->app->getConsole()->setStatus('整合包文件未更新');
         }
 
+        $url = self::API_URL . '/v1/mods/' . $id . '/files/' . $lastFile['id'] . '/changelog';
+        $param = [];
+        $data = $this->get($url, $param);
+
+        if (!empty($data['body']) && !empty($data['body']['data'])) {
+            file_put_contents($packPath . '/changelog.html', $data['body']['data']);
+        }
+
         $packInfo['id'] = $id;
         $packInfo['sha'] = $sha;
         $packInfo['file_id'] = $lastFile['id'];
