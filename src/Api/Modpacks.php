@@ -27,6 +27,7 @@ class Modpacks implements Api
     //document_url https://modpacksch.docs.apiary.io/
     const API_URL = 'https://api.modpacks.ch/public';
     const MANIFEST_FILE = 'manifest.json';
+    const CHANGELOG = 'changelog.txt';
     protected App $app;
 
     public function __construct(App $app)
@@ -107,13 +108,20 @@ class Modpacks implements Api
             return [];
         }
 
+        $versions = [];
         $newFileId = 0;
         foreach ($body['versions'] as $file) {
+            $versions[$file['id']] = [
+                'name' => $file['name'],
+                'updated' => $file['updated']
+            ];
             $new_id = intval($file['id']);
             if ($new_id > $newFileId) {
                 $newFileId = $new_id;
             }
         }
+
+        ksort($versions, SORT_NUMERIC);
 
         if (empty($newFileId)) {
             throw new Exception('未找到可下载的文件');
@@ -132,13 +140,26 @@ class Modpacks implements Api
         $console->reset();
         file_put_contents($packPath . '/' . self::MANIFEST_FILE, json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
 
-        if (!empty($manifest['changelog'])) {
-            $url = $manifest['changelog'];
+        $changelog = $packPath . '/' . self::CHANGELOG;
+
+        $begin = key($versions) - 1;
+        if (file_exists($changelog)) {
+            $begin = $packInfo['file_id'];
+        }
+
+        foreach ($versions as $file_id => $info) {
+            if ($file_id <= $begin) {
+                continue;
+            }
+
+            $console->setStatus('获取更新记录: ' . $info['name'] . ' [' . date('Y-m-d H:i:s', $info['updated']) . ']');
+
+            $url = self::API_URL . '/modpack/' . $packInfo['id'] . '/' . $file_id . '/changelog';
             $data = $client->get($url, [], 'json');
             $json = $data['body'];
 
             if (!empty($json['content'])) {
-                file_put_contents($packPath . '/changelog.txt', $json['content']);
+                file_put_contents($changelog, $info['name'] . "\n" . date('Y-m-d H:i:s', $info['updated']) . "\n\n" . $json['content'] . "\n\n", FILE_APPEND);
             }
         }
 
