@@ -192,11 +192,11 @@ class Curseforge implements Api
                     throw new Exception('文件校验失败');
                 }
             }
-
-            $this->app->extractTo($packPath, 'overrides.zip', '.');
         } else {
             $this->app->getConsole()->setStatus('整合包文件未更新');
         }
+
+        $this->app->extractTo($packPath, 'overrides.zip', '.');
 
         $url = self::API_URL . '/v1/mods/' . $id . '/files/' . $lastFile['id'] . '/changelog';
         $param = [];
