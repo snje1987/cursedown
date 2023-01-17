@@ -180,8 +180,15 @@ class Curseforge implements Api
 
         if ($packInfo['sha'] == '' || $packInfo['sha'] != $sha) {
             if (empty($lastFile['downloadUrl'])) {
+                if ($lastFile['id'] <= 9999999 && $lastFile['id'] >= 1000000) {
+                    $lastFile['downloadUrl'] = 'https://edge.forgecdn.net/files/' . intval($lastFile['id'] / 1000) . '/' . intval($lastFile['id'] % 1000) . '/' . $lastFile['fileName'];
+                }
+            }
+
+            if (empty($lastFile['downloadUrl'])) {
                 throw new Exception('下载地址获取失败');
             }
+
             $this->app->getConsole()->setStatus('开始下载整合包文件: ' . App::showSize($lastFile['fileLength']));
             $downloader = $this->app->getDownloader();
             $downloader->download($lastFile['downloadUrl'], $packPath . '/overrides.zip', true);
