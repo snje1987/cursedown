@@ -38,6 +38,7 @@ class App
     protected string $action;
     protected string $api = '';
     protected string $progress = '';
+    protected string $lastMsg = '';
     protected static ?self $instance = null;
     protected array $errorList = [];
     protected array $noticeList = [];
