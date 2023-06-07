@@ -164,7 +164,7 @@ class Config
     protected array $data = [
         'debug' => false,
         'api' => 'curseforge',
-        'curseforge_api_key' => '$2a$10$2cY0ETeTLhqYpS7wLIqVL.1Dhxr2bMNMki6eT5ZGGb1L4QOxT60QO',
+        'curseforge_api_key' => '',
     ];
     protected static array $dataType = [
         'debug' => self::TYPE_BOOL,
