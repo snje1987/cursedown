@@ -30,6 +30,8 @@ class Downloader
             return;
         }
 
+        $url = str_replace(' ', '%20', $url);
+
         if ($this->multiHandler === null) {
             $this->multiHandler = curl_multi_init();
         }

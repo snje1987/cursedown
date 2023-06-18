@@ -169,6 +169,7 @@ class Config
     protected static array $dataType = [
         'debug' => self::TYPE_BOOL,
         'api' => self::TYPE_API,
+        'curseforge_api_key' => self::TYPE_STRING,
     ];
     const TYPE_BOOL = 1;
     const TYPE_STRING = 2;
